@@ -1,0 +1,14 @@
+=== Database Dig Report ===
+
+Categories: 1
+Brands:     0
+Products:   0
+Orders:     0
+Users:      1
+
+--- Latest Products ---
+
+--- Categories ---
+- ملابس رياضية رجالي (Slug: sports-mens)
+
+--- Recent Orders ---

@@ -1,0 +1,136 @@
+/** @import must precede all other statements */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* RTL Support */
+html[dir="rtl"] {
+  direction: rtl;
+  text-align: right;
+}
+
+html[dir="rtl"] * {
+  text-align: inherit;
+}
+
+@layer base {
+  /**
+   * Tailwind CSS theme
+   * tailwind.config.ts expects the following color variables to be expressed as HSL values.
+   * A different format will require also updating the theme in tailwind.config.ts.
+  */
+  :root {
+    /* Light/comfortable white palette for e-commerce */
+    --background: 0 0% 99.5%;
+    --foreground: 210 10% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 210 10% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 10% 12%;
+
+    /* Primary: Navy blue (professional, masculine) */
+    --primary: 210 60% 25%;
+    --primary-foreground: 0 0% 99%;
+
+    /* Secondary: Light gray */
+    --secondary: 210 5% 92%;
+    --secondary-foreground: 210 10% 20%;
+
+    /* Muted: Medium gray */
+    --muted: 210 5% 85%;
+    --muted-foreground: 210 5% 45%;
+
+    /* Accent: Warm orange-red (for CTAs) */
+    --accent: 14 90% 52%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 210 5% 90%;
+    --input: 210 5% 95%;
+    --ring: 210 60% 35%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 0 0% 98.5%;
+    --sidebar-foreground: 210 10% 20%;
+    --sidebar-primary: 210 60% 25%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 14 90% 52%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 210 5% 90%;
+    --sidebar-ring: 210 60% 35%;
+  }
+
+  .dark {
+    --background: 210 10% 10%;
+    --foreground: 0 0% 95%;
+
+    --card: 210 10% 15%;
+    --card-foreground: 0 0% 95%;
+
+    --popover: 210 10% 15%;
+    --popover-foreground: 0 0% 95%;
+
+    --primary: 210 60% 50%;
+    --primary-foreground: 210 10% 10%;
+
+    --secondary: 210 5% 25%;
+    --secondary-foreground: 0 0% 95%;
+
+    --muted: 210 5% 30%;
+    --muted-foreground: 210 5% 70%;
+
+    --accent: 14 90% 52%;
+    --accent-foreground: 210 10% 10%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 210 5% 25%;
+    --input: 210 5% 20%;
+    --ring: 210 60% 50%;
+    --sidebar-background: 210 10% 12%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 210 60% 50%;
+    --sidebar-primary-foreground: 210 10% 10%;
+    --sidebar-accent: 14 90% 52%;
+    --sidebar-accent-foreground: 210 10% 10%;
+    --sidebar-border: 210 5% 25%;
+    --sidebar-ring: 210 60% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply font-cairo;
+  }
+
+  body {
+    @apply bg-background text-foreground font-cairo;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-tajawal font-bold;
+  }
+
+  :where(p, span, li, h1, h2, h3, h4, h5, h6, a, button, label, td, th) {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  pre,
+  code {
+    overflow-x: auto;
+    white-space: pre;
+  }
+}

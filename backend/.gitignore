@@ -30,7 +30,12 @@ env/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
-/media
+# Media files - exclude user uploads but include static assets
+/media/*
+!/media/logos/
+!/media/hero_section/
+!/media/logos/**
+!/media/hero_section/**
 /staticfiles
 
 # Environment

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ChevronLeft, ChevronRight, ZoomIn } from "lucide-react";
 
 interface ProductImageGalleryProps {
@@ -16,6 +16,29 @@ export default function ProductImageGallery({
 }: ProductImageGalleryProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
+  const [mainImageLoaded, setMainImageLoaded] = useState(false);
+  const mainImgRef = useRef<HTMLImageElement>(null);
+
+  const currentImage = images[selectedIndex] || images[0];
+
+  // Handle cached images: onLoad may not fire when served from cache (e.g. after navigating back)
+  useEffect(() => {
+    const img = mainImgRef.current;
+    if (!img || !currentImage) return;
+
+    const checkComplete = () => {
+      if (img.complete && img.naturalWidth > 0) {
+        setMainImageLoaded(true);
+        return true;
+      }
+      return false;
+    };
+
+    if (checkComplete()) return;
+
+    const rafId = requestAnimationFrame(() => checkComplete());
+    return () => cancelAnimationFrame(rafId);
+  }, [currentImage]);
 
   if (!images || images.length === 0) {
     return (
@@ -29,13 +52,13 @@ export default function ProductImageGallery({
     );
   }
 
-  const currentImage = images[selectedIndex] || images[0];
-
   const nextImage = () => {
+    setMainImageLoaded(false);
     setSelectedIndex((prev) => (prev + 1) % images.length);
   };
 
   const prevImage = () => {
+    setMainImageLoaded(false);
     setSelectedIndex((prev) => (prev - 1 + images.length) % images.length);
   };
 
@@ -43,14 +66,23 @@ export default function ProductImageGallery({
     <div className="flex flex-col gap-4">
       {/* Main Image */}
       <div className="relative w-full aspect-square bg-secondary rounded-lg overflow-hidden group">
+        {!mainImageLoaded && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-secondary z-[5]">
+            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mb-3" />
+            <span className="text-sm text-muted-foreground">يتم تحميل المنتج</span>
+          </div>
+        )}
         <img
+          ref={mainImgRef}
           src={currentImage}
           alt={`${productName} - صورة ${selectedIndex + 1}`}
-          className="w-full h-full object-cover"
+          className={`w-full h-full object-cover transition-opacity duration-300 ${mainImageLoaded ? 'opacity-100' : 'opacity-0'}`}
           loading={selectedIndex === 0 ? "eager" : "lazy"}
           decoding="async"
+          onLoad={() => setMainImageLoaded(true)}
           onError={(e) => {
             (e.target as HTMLImageElement).src = '/placeholder.svg';
+            setMainImageLoaded(true);
           }}
         />
 
@@ -111,7 +143,7 @@ export default function ProductImageGallery({
           {images.map((image, index) => (
             <button
               key={index}
-              onClick={() => setSelectedIndex(index)}
+              onClick={() => { setMainImageLoaded(false); setSelectedIndex(index); }}
               className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${
                 selectedIndex === index
                   ? "border-primary ring-2 ring-primary ring-offset-2"

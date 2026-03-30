@@ -98,8 +98,9 @@ export default function SearchResults() {
         {/* Results */}
         <section className="max-w-7xl mx-auto px-4 lg:px-8 py-8 md:py-12">
           {isLoading && results.length === 0 ? (
-            <div className="flex justify-center py-20">
+            <div className="flex flex-col items-center justify-center py-20 gap-3">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <span className="text-muted-foreground text-sm">يتم تحميل الصفحة</span>
             </div>
           ) : results.length > 0 ? (
             <>
@@ -109,13 +110,15 @@ export default function SearchResults() {
                 </p>
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
                 {results.map((product) => (
                   <ProductCard
                     key={product.id}
                     id={product.id}
                     slug={product.slug}
                     name={product.name_ar}
+                    name_ar={product.name_ar}
+                    name_en={product.name_en}
                     price={Number(product.final_price || product.price)}
                     originalPrice={
                       product.discount_percentage > 0 && product.final_price
@@ -128,6 +131,8 @@ export default function SearchResults() {
                     reviewCount={10}
                     discount={product.discount_percentage}
                     inStock={true}
+                    available_sizes={product.available_sizes}
+                    available_colors={product.available_colors}
                   />
                 ))}
               </div>

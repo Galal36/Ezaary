@@ -124,13 +124,35 @@ html[dir="rtl"] * {
   }
 
   :where(p, span, li, h1, h2, h3, h4, h5, h6, a, button, label, td, th) {
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    /* Avoid breaking Arabic words into awkward letter chunks on small screens */
+    overflow-wrap: break-word;
+    word-break: normal;
+    hyphens: auto;
   }
 
   pre,
   code {
     overflow-x: auto;
     white-space: pre;
+  }
+}
+
+/* Announcement Bar Marquee Animation */
+/* For LTR and RTL: start from right edge of container, scroll to left */
+@keyframes marquee-scroll-ltr {
+  0% {
+    transform: translateX(var(--marquee-start, 100%));
+  }
+  100% {
+    transform: translateX(var(--marquee-end, -50%));
+  }
+}
+
+@keyframes marquee-scroll-rtl {
+  0% {
+    transform: translateX(var(--marquee-start, 100%));
+  }
+  100% {
+    transform: translateX(var(--marquee-end, -50%));
   }
 }

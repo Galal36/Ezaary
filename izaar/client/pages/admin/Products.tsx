@@ -62,7 +62,7 @@ export default function AdminProducts() {
       };
       
       // Call the API directly to get full response with pagination info
-      const API_BASE_URL = 'http://localhost:8000/api';
+      const API_BASE_URL = 'https://ezaary.com/api';
       const queryParams = new URLSearchParams(params);
       const response = await fetch(`${API_BASE_URL}/products/?${queryParams}`, {
         headers: {
@@ -95,7 +95,7 @@ export default function AdminProducts() {
               page: page.toString(),
             };
             const pageQueryParams = new URLSearchParams(pageParams);
-            const pageResponse = await fetch(`${API_BASE_URL}/products/?${pageQueryParams}`, {
+            const pageResponse = await fetch(`https://ezaary.com/api/products/?${pageQueryParams}`, {
               headers: {
                 'Content-Type': 'application/json',
               },

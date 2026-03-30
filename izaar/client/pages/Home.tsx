@@ -507,17 +507,31 @@ import ProductCard from "@/components/ProductCard";
 import CategoryCard from "@/components/CategoryCard";
 import { categories as categoriesApi, products as productsApi } from "@/lib/api-client";
 import { normalizeImageUrl } from "@/lib/data-mappers";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
 
 export default function Home() {
-  const [currentSlide, setCurrentSlide] = useState(1); // Start with slide 2 (إزاري_1) as default
+  const [currentSlide, setCurrentSlide] = useState(0); // Start with first slide (man image)
   const [autoPlay, setAutoPlay] = useState(true);
   const [categoriesList, setCategoriesList] = useState<any[]>([]);
   const [specialOffers, setSpecialOffers] = useState<any[]>([]);
-  const [allProducts, setAllProducts] = useState<any[]>([]);
+  const [ourProducts, setOurProducts] = useState<any[]>([]);
+  const [otherProducts, setOtherProducts] = useState<any[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
   const [isLoadingOffers, setIsLoadingOffers] = useState(true);
-  const [isLoadingAllProducts, setIsLoadingAllProducts] = useState(true);
+  const [isLoadingOurProducts, setIsLoadingOurProducts] = useState(true);
+  const [isLoadingOtherProducts, setIsLoadingOtherProducts] = useState(true);
+  const { t, language } = useLanguage();
+
+  // Helper to get product name based on language
+  const getProductName = (product: any) => {
+    if (language === 'en') {
+      // If English name exists and is not empty, use it; otherwise fallback to Arabic
+      return (product.name_en && product.name_en.trim() !== '') ? product.name_en : product.name_ar;
+    }
+    // Always use Arabic name in Arabic mode
+    return product.name_ar;
+  };
 
   // Helper to get product image
   const getProductImage = (product: any) => {
@@ -561,47 +575,48 @@ export default function Home() {
   const [visibleOffersCount, setVisibleOffersCount] = useState(9);
   const [totalOffers, setTotalOffers] = useState(0);
 
-  const [visibleAllProductsCount, setVisibleAllProductsCount] = useState(12);
-  const [totalAllProducts, setTotalAllProducts] = useState(0);
+  const [visibleOurProductsCount, setVisibleOurProductsCount] = useState(8);
+  const [visibleOtherProductsCount, setVisibleOtherProductsCount] = useState(12);
 
-  // Hero slides
+  // Hero slides - Man image first as default when user opens the site
   const heroSlides = [
     {
       id: 1,
-      title: "إزاري نسائي",
-      subtitle: "أحدث صيحات الموضة النسائية",
-      discountButton: "خصومات تصل الي 20 في المائة",
-      cta: "اكتشف المزيد",
-      ctaLink: "#products", // Scrolls to products section on home page
-      image: "http://localhost:8000/media/hero_section/" + encodeURIComponent("إزاري_نسائي.png"),
-      discount: "خصم 20%",
+      title: language === 'en' ? t('hero.ezaaryMen') : "إزاري رجالي",
+      subtitle: language === 'en' ? t('hero.mostModernClothes') : "أحدث موديلات الملابس الرجالية",
+      discountButton: language === 'en' ? t('hero.discountUpTo30') : "خصومات تصل الي 30 في المائة لا تنتظر",
+      cta: language === 'en' ? t('hero.discoverMore') : "اكتشف المزيد من منتجات الرجال",
+      ctaLink: "#products",
+      image: "https://ezaary.com/media/hero_section/hero-man.webp",
+      discount: "خصم 30%",
     },
     {
       id: 2,
-      title: "إزاري رجالي",
-      subtitle: "أحدث موديلات الملابس الرجالية",
-      discountButton: "خصومات تصل الي 30 في المائة لا تنتظر",
-      cta: "اكتشف المزيد من منتجات الرجال",
-      ctaLink: "#products", // Scrolls to products section on home page
-      image: "http://localhost:8000/media/hero_section/" + encodeURIComponent("إزاري_1.png"),
-      discount: "خصم 30%",
+      title: language === 'en' ? t('hero.ezaaryWomen') : "إزاري نسائي",
+      subtitle: language === 'en' ? t('hero.mostModernClothes') : "أحدث صيحات الموضة النسائية",
+      discountButton: language === 'en' ? t('hero.discountUpTo20') : "خصومات تصل الي 20 في المائة",
+      cta: language === 'en' ? t('hero.discoverMore') : "اكتشف المزيد",
+      ctaLink: "#products",
+      image: "https://ezaary.com/media/hero_section/woman-1.webp",
+      discount: "خصم 20%",
     },
     {
       id: 3,
-      title: "إزاري رجالي",
-      subtitle: "جودة عالية وأسعار منافسة",
-      discountButton: "خصومات تصل الي 30 في المائة لا تنتظر",
-      cta: "اكتشف المزيد من منتجات الرجال",
-      ctaLink: "#products", // Scrolls to products section on home page
-      image: "http://localhost:8000/media/hero_section/" + encodeURIComponent("أزاري_رجالي 2.png"),
-      discount: "خصم 30%",
+      title: language === 'en' ? t('hero.ezaaryWomen') : "إزاري نسائي",
+      subtitle: language === 'en' ? t('hero.mostModernClothes') : "جودة عالية وأسعار منافسة",
+      discountButton: language === 'en' ? t('hero.discountUpTo20') : "خصومات تصل الي 20 في المائة",
+      cta: language === 'en' ? t('hero.discoverMore') : "اكتشف المزيد",
+      ctaLink: "#products",
+      image: "https://ezaary.com/media/hero_section/hero-woman2.webp",
+      discount: "خصم 20%",
     },
   ];
 
   useEffect(() => {
     fetchCategories();
     fetchSpecialOffers();
-    fetchAllProducts();
+    fetchOurProducts();
+    fetchOtherProducts();
   }, []);
 
   const fetchCategories = async () => {
@@ -631,19 +646,29 @@ export default function Home() {
     }
   };
 
-  const fetchAllProducts = async () => {
+  const fetchOurProducts = async () => {
     try {
-      setIsLoadingAllProducts(true);
-      // Use display_order for custom ordering (default ordering from backend)
-      const data = await productsApi.list({ page_size: '24' });
+      setIsLoadingOurProducts(true);
+      const data = await productsApi.list({ category: 'hoodies', page_size: '12' });
       const products = data.results || data;
-      const total = data.count || products.length;
-      setAllProducts(products);
-      setTotalAllProducts(total);
+      setOurProducts(products);
     } catch (error) {
-      console.error("Failed to fetch all products:", error);
+      console.error("Failed to fetch our products:", error);
     } finally {
-      setIsLoadingAllProducts(false);
+      setIsLoadingOurProducts(false);
+    }
+  };
+
+  const fetchOtherProducts = async () => {
+    try {
+      setIsLoadingOtherProducts(true);
+      const data = await productsApi.list({ exclude_category: 'hoodies', page_size: '16' });
+      const products = data.results || data;
+      setOtherProducts(products);
+    } catch (error) {
+      console.error("Failed to fetch other products:", error);
+    } finally {
+      setIsLoadingOtherProducts(false);
     }
   };
 
@@ -651,8 +676,12 @@ export default function Home() {
     setVisibleOffersCount(prev => prev + 9);
   };
 
-  const handleLoadMoreAll = () => {
-    setVisibleAllProductsCount(prev => prev + 12);
+  const handleLoadMoreOur = () => {
+    setVisibleOurProductsCount((prev) => prev + 8);
+  };
+
+  const handleLoadMoreOther = () => {
+    setVisibleOtherProductsCount((prev) => prev + 12);
   };
 
   useEffect(() => {
@@ -684,7 +713,7 @@ export default function Home() {
 
       <main className="flex-1">
         {/* Hero Section */}
-        <section className="relative w-full h-[300px] md:h-[400px] lg:h-[500px] overflow-hidden">
+        <section className="relative w-full h-[400px] sm:h-[450px] md:h-[500px] lg:h-[600px] overflow-hidden bg-gray-100">
           {heroSlides.map((slide, index) => (
             <div
               key={slide.id}
@@ -696,36 +725,38 @@ export default function Home() {
                 alt={slide.title}
                 className="w-full h-full object-cover"
                 style={{ 
-                  objectPosition: slide.id === 1 
-                    ? '90% 12%' // For slide 1 (إزاري_نسائي): position higher up and more to the right
-                    : slide.id === 2 
-                    ? '90% 10%' // For slide 2 (إزاري_1): position higher up and more to the right
-                    : '90% 0%' // For slide 3 (أزاري_رجالي 2): position higher up and more to the right
+                  objectPosition: 'center 35%',
+                  transform: 'scale(1.15)'
                 }}
+                loading={index === 0 ? "eager" : "lazy"}
               />
-              <div className="absolute inset-0 bg-gradient-to-l from-transparent via-black/20 to-black/50" />
+              {/* Stronger gradient on mobile for better text visibility */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/40 to-transparent md:bg-gradient-to-r md:from-black/60 md:via-black/30 md:to-transparent" />
 
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-white px-4 md:px-8">
-                <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">
-                  {slide.title}
-                </h1>
-                <p className="text-lg md:text-xl mb-6 opacity-90">
-                  {slide.subtitle}
-                </p>
-                <div className="flex gap-4 flex-col sm:flex-row justify-center">
-                  {slide.discountButton && (
-                    <span className="bg-accent text-accent-foreground px-8 py-3 rounded-lg font-bold">
-                      {slide.discountButton}
-                    </span>
-                  )}
-                  {slide.cta && (
-                    <a
-                      href={slide.ctaLink || "#products"}
-                      className="bg-white/90 text-foreground px-8 py-3 rounded-lg font-bold hover:bg-white transition-colors inline-block"
-                    >
-                      {slide.cta}
-                    </a>
-                  )}
+              {/* Hero Content - Positioned at bottom on mobile, left side on desktop */}
+              <div className="absolute inset-0 flex flex-col items-center md:items-start justify-end md:justify-center pb-20 md:pb-0 md:pl-12 lg:pl-20 text-center md:text-start text-white px-4 md:px-8">
+                <div className="max-w-2xl">
+                  <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 md:mb-4 drop-shadow-2xl">
+                    {slide.title}
+                  </h1>
+                  <p className="text-base sm:text-lg md:text-xl mb-4 md:mb-6 opacity-95 drop-shadow-xl">
+                    {slide.subtitle}
+                  </p>
+                  <div className="flex gap-3 md:gap-4 flex-col sm:flex-row justify-center md:justify-start">
+                    {slide.discountButton && (
+                      <span className="bg-accent text-accent-foreground px-6 md:px-8 py-2 md:py-3 rounded-lg font-bold text-sm md:text-base shadow-xl">
+                        {slide.discountButton}
+                      </span>
+                    )}
+                    {slide.cta && (
+                      <a
+                        href={slide.ctaLink || "#products"}
+                        className="bg-white/95 text-foreground px-6 md:px-8 py-2 md:py-3 rounded-lg font-bold hover:bg-white transition-colors inline-block text-sm md:text-base shadow-xl"
+                      >
+                        {slide.cta}
+                      </a>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -764,28 +795,33 @@ export default function Home() {
           <div className="max-w-7xl mx-auto px-4 lg:px-8">
             <div className="mb-10">
               <h2 className="text-3xl md:text-4xl font-bold text-foreground text-center">
-                منتجاتنا
+                {language === 'en' ? "Our Products" : "منتجاتنا"}
               </h2>
               <p className="text-center text-muted-foreground mt-2">
-                تصفح جميع منتجاتنا المميزة
+                {language === 'en' ? "Explore our hoodie collection" : "تصفح جميع منتجاتنا من فئة الهودي"}
               </p>
             </div>
 
-            {isLoadingAllProducts ? (
-              <div className="flex justify-center py-10">
+            {isLoadingOurProducts ? (
+              <div className="flex flex-col items-center justify-center py-10 gap-2">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                <span className="text-muted-foreground text-sm">{language === 'en' ? 'Loading products...' : 'يتم تحميل المنتج'}</span>
               </div>
-            ) : offersListEmpty(allProducts) ? (
-              <div className="text-center py-10 text-muted-foreground">لا توجد منتجات حالياً</div>
+            ) : offersListEmpty(ourProducts) ? (
+              <div className="text-center py-10 text-muted-foreground">
+                {language === 'en' ? "No products available right now" : "لا توجد منتجات حالياً"}
+              </div>
             ) : (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {allProducts.slice(0, visibleAllProductsCount).map((product) => (
+                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
+                  {ourProducts.slice(0, visibleOurProductsCount).map((product) => (
                     <ProductCard
                       key={product.id}
                       id={product.id}
                       slug={product.slug}
-                      name={product.name_ar}
+                      name={getProductName(product)}
+                      name_ar={product.name_ar}
+                      name_en={product.name_en}
                       price={Number(product.final_price || product.price)}
                       originalPrice={
                         product.discount_percentage > 0 && product.final_price
@@ -799,17 +835,19 @@ export default function Home() {
                       discount={product.discount_percentage}
                       inStock={product.is_in_stock}
                       stock_quantity={product.stock_quantity}
+                      available_sizes={product.available_sizes}
+                      available_colors={product.available_colors}
                     />
                   ))}
                 </div>
 
-                {visibleAllProductsCount < totalAllProducts && (
+                {visibleOurProductsCount < ourProducts.length && (
                   <div className="text-center mt-10">
                     <button
-                      onClick={handleLoadMoreAll}
+                      onClick={handleLoadMoreOur}
                       className="inline-block bg-primary text-primary-foreground px-8 py-3 rounded-lg font-bold hover:bg-primary/90 transition-colors cursor-pointer"
                     >
-                      عرض المزيد من المنتجات
+                      {language === 'en' ? "Load more" : "عرض المزيد"}
                     </button>
                   </div>
                 )}
@@ -818,33 +856,38 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Featured Products Section */}
+        {/* Other Products Section */}
         <section className="bg-secondary py-12 md:py-16">
           <div className="max-w-7xl mx-auto px-4 lg:px-8">
             <div className="mb-10">
               <h2 className="text-3xl md:text-4xl font-bold text-foreground text-center">
-                عروض خاصة
+                {language === 'en' ? "Other Products" : "منتجات أخري"}
               </h2>
               <p className="text-center text-muted-foreground mt-2">
-                اكتشف أفضل العروض والخصومات على المنتجات المختارة
+                {language === 'en' ? "Explore more products" : "تصفح باقي المنتجات"}
               </p>
             </div>
 
-            {isLoadingOffers ? (
-              <div className="flex justify-center py-10">
+            {isLoadingOtherProducts ? (
+              <div className="flex flex-col items-center justify-center py-10 gap-2">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                <span className="text-muted-foreground text-sm">{language === 'en' ? 'Loading products...' : 'يتم تحميل المنتج'}</span>
               </div>
-            ) : offersListEmpty(specialOffers) ? (
-              <div className="text-center py-10 text-muted-foreground">لا توجد عروض حالياً</div>
+            ) : offersListEmpty(otherProducts) ? (
+              <div className="text-center py-10 text-muted-foreground">
+                {language === 'en' ? "No products available right now" : "لا توجد منتجات حالياً"}
+              </div>
             ) : (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {specialOffers.slice(0, visibleOffersCount).map((product) => (
+                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
+                  {otherProducts.slice(0, visibleOtherProductsCount).map((product) => (
                     <ProductCard
                       key={product.id}
                       id={product.id}
                       slug={product.slug}
-                      name={product.name_ar}
+                      name={getProductName(product)}
+                      name_ar={product.name_ar}
+                      name_en={product.name_en}
                       price={Number(product.final_price || product.price)}
                       originalPrice={
                         product.discount_percentage > 0 && product.final_price
@@ -858,29 +901,20 @@ export default function Home() {
                       discount={product.discount_percentage}
                       inStock={product.is_in_stock}
                       stock_quantity={product.stock_quantity}
+                      available_sizes={product.available_sizes}
+                      available_colors={product.available_colors}
                     />
                   ))}
                 </div>
 
-                {visibleOffersCount < totalOffers && (
+                {visibleOtherProductsCount < otherProducts.length && (
                   <div className="text-center mt-10">
                     <button
-                      onClick={handleLoadMore}
+                      onClick={handleLoadMoreOther}
                       className="inline-block bg-primary text-primary-foreground px-8 py-3 rounded-lg font-bold hover:bg-primary/90 transition-colors cursor-pointer"
                     >
-                      عرض المزيد من العروض
+                      {language === 'en' ? "Load more" : "عرض المزيد"}
                     </button>
-                  </div>
-                )}
-
-                {visibleOffersCount >= totalOffers && (
-                  <div className="text-center mt-10">
-                    <Link
-                      to="/products"
-                      className="inline-block bg-outline border border-primary text-primary px-8 py-3 rounded-lg font-bold hover:bg-primary/10 transition-colors"
-                    >
-                      تصفح كل المنتجات
-                    </Link>
                   </div>
                 )}
               </>
@@ -900,11 +934,12 @@ export default function Home() {
           </div>
 
           {isLoadingCategories ? (
-            <div className="flex justify-center py-10">
+            <div className="flex flex-col items-center justify-center py-10 gap-2">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <span className="text-muted-foreground text-sm">{language === 'en' ? 'Loading...' : 'يتم تحميل المنتج'}</span>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
               {categoriesList.map((category) => (
                 <CategoryCard
                   key={category.id}
@@ -917,14 +952,78 @@ export default function Home() {
           )}
         </section>
 
+        {/* Featured Products Section */}
+        <section className="bg-secondary py-12 md:py-16">
+          <div className="max-w-7xl mx-auto px-4 lg:px-8">
+            <div className="mb-10">
+              <h2 className="text-3xl md:text-4xl font-bold text-foreground text-center">
+                {t('home.specialOffers')}
+              </h2>
+              <p className="text-center text-muted-foreground mt-2">
+                {t('home.specialOffersDesc')}
+              </p>
+            </div>
+
+            {isLoadingOffers ? (
+              <div className="flex flex-col items-center justify-center py-10 gap-2">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                <span className="text-muted-foreground text-sm">{language === 'en' ? 'Loading offers...' : 'يتم تحميل المنتج'}</span>
+              </div>
+            ) : offersListEmpty(specialOffers) ? (
+              <div className="text-center py-10 text-muted-foreground">{t('home.noOffersAvailable')}</div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
+                  {specialOffers.slice(0, visibleOffersCount).map((product) => (
+                    <ProductCard
+                      key={product.id}
+                      id={product.id}
+                      slug={product.slug}
+                      name={getProductName(product)}
+                      name_ar={product.name_ar}
+                      name_en={product.name_en}
+                      price={Number(product.final_price || product.price)}
+                      originalPrice={
+                        product.discount_percentage > 0 && product.final_price
+                          ? Number(product.price)
+                          : undefined
+                      }
+                      image={getProductImage(product)}
+                      images={getProductImages(product)}
+                      rating={4.8}
+                      reviewCount={12}
+                      discount={product.discount_percentage}
+                      inStock={product.is_in_stock}
+                      stock_quantity={product.stock_quantity}
+                      available_sizes={product.available_sizes}
+                      available_colors={product.available_colors}
+                    />
+                  ))}
+                </div>
+
+                {visibleOffersCount < totalOffers && (
+                  <div className="text-center mt-10">
+                    <button
+                      onClick={handleLoadMore}
+                      className="inline-block bg-primary text-primary-foreground px-8 py-3 rounded-lg font-bold hover:bg-primary/90 transition-colors cursor-pointer"
+                    >
+                      {t('home.loadMoreOffers')}
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </section>
+
         {/* CTA Section */}
         <section className="max-w-7xl mx-auto px-4 lg:px-8 py-12 md:py-16">
           <div className="bg-primary text-primary-foreground rounded-lg p-8 md:p-12 text-center">
             <h2 className="text-2xl md:text-3xl font-bold mb-4">
-              هل لديك أسئلة أو تحتاج مساعدة؟
+              {t('home.needHelp')}
             </h2>
             <p className="text-lg mb-6 opacity-90">
-              نحن هنا للمساعدة. تواصل معنا عبر WhatsApp أو أي وسيلة اتصال أخرى
+              {t('home.needHelpDesc')}
             </p>
             <a
               href="https://wa.me/201204437575?text=مرحباً، أرغب في الاستفسار عن..."
@@ -933,7 +1032,7 @@ export default function Home() {
               className="inline-flex items-center gap-2 bg-accent text-accent-foreground px-8 py-3 rounded-lg font-bold hover:opacity-90 transition-opacity"
             >
               <MessageCircle className="w-5 h-5" />
-              تواصل معنا عبر WhatsApp
+              {t('home.contactWhatsApp')}
             </a>
           </div>
         </section>
@@ -948,8 +1047,8 @@ export default function Home() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-bold mb-2">شحن سريع</h3>
-                <p className="text-muted-foreground">التوصيل خلال 3-5 أيام عمل</p>
+                <h3 className="text-xl font-bold mb-2">{t('home.fastShipping')}</h3>
+                <p className="text-muted-foreground">{t('home.fastShippingDesc')}</p>
               </div>
               <div>
                 <div className="w-16 h-16 mx-auto mb-4 bg-accent rounded-full flex items-center justify-center">
@@ -957,8 +1056,8 @@ export default function Home() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-bold mb-2">أسعار منافسة</h3>
-                <p className="text-muted-foreground">أفضل الأسعار في السوق</p>
+                <h3 className="text-xl font-bold mb-2">{t('home.competitivePrices')}</h3>
+                <p className="text-muted-foreground">{t('home.competitivePricesDesc')}</p>
               </div>
               <div>
                 <div className="w-16 h-16 mx-auto mb-4 bg-accent rounded-full flex items-center justify-center">
@@ -966,8 +1065,8 @@ export default function Home() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.172l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-bold mb-2">ضمان الجودة</h3>
-                <p className="text-muted-foreground">منتجات أصلية وموثوقة</p>
+                <h3 className="text-xl font-bold mb-2">{t('home.qualityGuarantee')}</h3>
+                <p className="text-muted-foreground">{t('home.qualityGuaranteeDesc')}</p>
               </div>
             </div>
           </div>

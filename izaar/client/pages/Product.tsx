@@ -1,12 +1,14 @@
 import { useParams, Link } from "react-router-dom";
-import { Heart, ChevronRight, ShoppingCart, Loader2 } from "lucide-react";
+import { Heart, ChevronRight, ShoppingCart, ShoppingBag, Loader2 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ProductImageGallery from "@/components/ProductImageGallery";
+import QuickBuyModal from "@/components/QuickBuyModal";
 import { products as productsApi } from "@/lib/api-client";
 import { useState, useEffect, useMemo } from "react";
 import { useCart } from "@/contexts/CartContext";
 import { useWishlist } from "@/contexts/WishlistContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
 import { normalizeImageUrl } from "@/lib/data-mappers";
 
@@ -16,11 +18,23 @@ export default function Product() {
   const [relatedProducts, setRelatedProducts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
+  const [showQuickBuy, setShowQuickBuy] = useState(false);
   const { addToCart } = useCart();
   const { addToWishlist, isInWishlist } = useWishlist();
+  const { language, t } = useLanguage();
   
   // Check if product is in wishlist
   const isWishlisted = product ? isInWishlist(product.id) : false;
+
+  // Get product name based on language
+  const getProductName = (prod: any) => {
+    return language === 'en' ? (prod.name_en || prod.name_ar) : prod.name_ar;
+  };
+
+  // Get product description based on language
+  const getProductDescription = (prod: any) => {
+    return language === 'en' ? (prod.description_en || prod.description_ar) : prod.description_ar;
+  };
 
   useEffect(() => {
     if (productId) {
@@ -85,7 +99,7 @@ export default function Product() {
 
     } catch (error) {
       console.error("Failed to load product:", error);
-      toast.error("فشل تحميل المنتج");
+      toast.error(t('message.loadingFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -98,6 +112,12 @@ export default function Product() {
   const colorMap: Record<string, string> = {
     "أزرق": "#3b82f6", "أسود": "#000000", "أبيض": "#ffffff", "رمادي": "#6b7280", "أحمر": "#ef4444", "أخضر": "#10b981",
     "Blue": "#3b82f6", "Black": "#000000", "White": "#ffffff", "Gray": "#6b7280", "Red": "#ef4444", "Green": "#10b981",
+    // Existing (already in DB in some products)
+    "كحلي": "#1e3a8a", "بيج": "#d6c7a1",
+    "Navy": "#1e3a8a", "Beige": "#d6c7a1",
+    // New colors
+    "برجاندي": "#800020", "بني": "#8B4513", "زيتي": "#556B2F",
+    "Burgundy": "#800020", "Brown": "#8B4513", "Olive": "#556B2F",
   };
 
   // Clean and deduplicate colors
@@ -116,25 +136,25 @@ export default function Product() {
   const handleAddToCart = () => {
     if (product) {
       if (product.available_sizes && product.available_sizes.length > 0 && !selectedSize) {
-        toast.error("يرجى اختيار المقاس");
+        toast.error(t('product.selectSize'));
         return;
       }
       if (product.available_colors && product.available_colors.length > 0 && !selectedColor) {
-        toast.error("يرجى اختيار اللون");
+        toast.error(t('product.selectColor'));
         return;
       }
 
       // Check stock availability before adding to cart
       const stockQuantity = product.stock_quantity ?? Infinity;
       if (stockQuantity !== undefined && stockQuantity < Infinity && quantity > stockQuantity) {
-        toast.error(`المتاح في المخزون: ${stockQuantity} قطعة فقط`);
+        toast.error(`${t('product.stockAvailable')}: ${stockQuantity} ${t('product.piecesOnly')}`);
         return;
       }
 
       addToCart(
         {
           id: product.id,
-          name: product.name_ar,
+          name: getProductName(product),
           price: Number(product.final_price || product.price),
           originalPrice: product.discount_percentage > 0 ? Number(product.price) : undefined,
           discountPercentage: product.discount_percentage > 0 ? Number(product.discount_percentage) : undefined,
@@ -147,7 +167,7 @@ export default function Product() {
         },
         quantity
       );
-      toast.success("تمت الإضافة للسلة");
+      toast.success(t('product.addedToCart'));
     }
   };
 
@@ -197,7 +217,10 @@ export default function Product() {
       <div className="w-full min-h-screen flex flex-col bg-background">
         <Header />
         <main className="flex-1 flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <span className="text-muted-foreground text-sm">{language === 'en' ? 'Loading page...' : 'يتم تحميل الصفحة'}</span>
+          </div>
         </main>
         <Footer />
       </div>
@@ -210,15 +233,15 @@ export default function Product() {
         <Header />
         <main className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <h1 className="text-3xl font-bold text-primary mb-4">المنتج غير موجود</h1>
+            <h1 className="text-3xl font-bold text-primary mb-4">{t('product.productNotFound')}</h1>
             <p className="text-muted-foreground mb-6">
-              نعتذر، المنتج الذي تبحث عنه غير متاح
+              {t('product.productNotAvailable')}
             </p>
             <Link
               to="/"
               className="inline-block bg-primary text-primary-foreground px-8 py-3 rounded-lg font-bold hover:bg-primary/90 transition-colors"
             >
-              العودة للرئيسية
+              {t('product.backToHome')}
             </Link>
           </div>
         </main>
@@ -239,18 +262,18 @@ export default function Product() {
           <div className="max-w-7xl mx-auto px-4 lg:px-8">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Link to="/" className="hover:text-primary transition-colors">
-                الرئيسية
+                {t('breadcrumb.home')}
               </Link>
               <ChevronRight className="w-4 h-4" />
               <Link to="/categories" className="hover:text-primary transition-colors">
-                الفئات
+                {t('breadcrumb.categories')}
               </Link>
               <ChevronRight className="w-4 h-4" />
               <span className="text-muted-foreground">
                 {product.category_name}
               </span>
               <ChevronRight className="w-4 h-4" />
-              <span className="text-foreground font-medium">{product.name_ar}</span>
+              <span className="text-foreground font-medium">{getProductName(product)}</span>
             </div>
           </div>
         </section>
@@ -262,7 +285,7 @@ export default function Product() {
             <div className="flex flex-col gap-4">
               <ProductImageGallery
                 images={productImages}
-                productName={product.name_ar}
+                productName={getProductName(product)}
                 discountPercentage={discountPercentage}
                 isInStock={product.is_in_stock}
               />
@@ -273,7 +296,7 @@ export default function Product() {
               {/* Name and Rating */}
               <div>
                 <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-                  {product.name_ar}
+                  {getProductName(product)}
                 </h1>
                 {/* Rating - DISABLED: Will be enabled later when review system is activated */}
                 {/* 
@@ -300,29 +323,29 @@ export default function Product() {
                 {product.discount_percentage > 0 ? (
                   <div className="flex items-center gap-3">
                     <span className="text-3xl font-bold text-accent">
-                      {Number(product.final_price).toLocaleString("ar-EG")} جنيه
+                      {Number(product.final_price).toLocaleString(language === 'en' ? 'en-US' : 'ar-EG')} {t('product.egp')}
                     </span>
                     <span className="text-lg text-muted-foreground line-through">
-                      {Number(product.price).toLocaleString("ar-EG")} جنيه
+                      {Number(product.price).toLocaleString(language === 'en' ? 'en-US' : 'ar-EG')} {t('product.egp')}
                     </span>
                   </div>
                 ) : (
                   <span className="text-3xl font-bold text-foreground">
-                    {Number(product.price).toLocaleString("ar-EG")} جنيه
+                    {Number(product.price).toLocaleString(language === 'en' ? 'en-US' : 'ar-EG')} {t('product.egp')}
                   </span>
                 )}
               </div>
 
               {/* Description */}
               <div>
-                <h3 className="text-lg font-bold text-foreground mb-2">الوصف</h3>
-                <p className="text-muted-foreground">{product.description_ar}</p>
+                <h3 className="text-lg font-bold text-foreground mb-2">{t('product.description')}</h3>
+                <p className="text-muted-foreground">{getProductDescription(product)}</p>
               </div>
 
               {/* Sizes */}
               {product.available_sizes && product.available_sizes.length > 0 && (
                 <div>
-                  <h3 className="font-medium text-foreground mb-3">المقاس:</h3>
+                  <h3 className="font-medium text-foreground mb-3">{t('product.size')}:</h3>
                   <div className="flex flex-wrap gap-3">
                     {product.available_sizes.map((size: string) => (
                       <button
@@ -343,7 +366,7 @@ export default function Product() {
               {/* Colors */}
               {validColors.length > 0 && (
                 <div>
-                  <h3 className="font-medium text-foreground mb-3">اللون:</h3>
+                  <h3 className="font-medium text-foreground mb-3">{t('product.color')}:</h3>
                   <div className="flex flex-wrap gap-3">
                     {validColors.map((color: string) => {
                       const hexColor = colorMap[color] || color;
@@ -368,9 +391,9 @@ export default function Product() {
 
               {/* Stock Status */}
               <div className="flex items-center gap-2">
-                <span className="font-medium text-foreground">الحالة:</span>
+                <span className="font-medium text-foreground">{t('product.status')}:</span>
                 <span className={product.is_in_stock ? "text-green-600 font-bold" : "text-red-600 font-bold"}>
-                  {product.is_in_stock ? "متوفر في المخزن" : "غير متوفر"}
+                  {product.is_in_stock ? t('product.available') : t('product.notAvailable')}
                 </span>
               </div>
 
@@ -392,7 +415,7 @@ export default function Product() {
                       onClick={() => {
                         const stockQuantity = product.stock_quantity ?? Infinity;
                         if (stockQuantity !== undefined && stockQuantity < Infinity && quantity + 1 > stockQuantity) {
-                          toast.error(`المتاح في المخزون: ${stockQuantity} قطعة فقط`);
+                          toast.error(`${t('product.stockAvailable')}: ${stockQuantity} ${t('product.piecesOnly')}`);
                         } else {
                           setQuantity(quantity + 1);
                         }
@@ -406,20 +429,30 @@ export default function Product() {
                 </div>
                 {product.stock_quantity !== undefined && product.stock_quantity < Infinity && (
                   <p className="text-sm text-muted-foreground">
-                    المتاح في المخزون: {product.stock_quantity} قطعة
+                    {t('product.stockAvailable')}: {product.stock_quantity} {t('product.piecesOnly')}
                   </p>
                 )}
               </div>
 
-              {/* Add to Cart Button */}
-              <button
-                onClick={handleAddToCart}
-                disabled={!product.is_in_stock}
-                className="w-full py-3 px-4 bg-primary text-primary-foreground rounded-lg font-bold text-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                <ShoppingCart className="w-5 h-5" />
-                أضف للسلة
-              </button>
+              {/* Add to Cart & Buy Now Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={handleAddToCart}
+                  disabled={!product.is_in_stock}
+                  className="flex-1 py-3 px-4 bg-primary text-primary-foreground rounded-lg font-bold text-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <ShoppingCart className="w-5 h-5" />
+                  {t('product.addToCart')}
+                </button>
+                <button
+                  onClick={() => setShowQuickBuy(true)}
+                  disabled={!product.is_in_stock}
+                  className="py-3 px-4 bg-accent text-accent-foreground rounded-lg font-bold text-lg hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <ShoppingBag className="w-5 h-5" />
+                  {language === 'en' ? 'Buy Now' : 'اشتري الآن'}
+                </button>
+              </div>
 
               {/* Wishlist Button */}
               <button
@@ -428,7 +461,7 @@ export default function Product() {
                     addToWishlist({
                       id: product.id,
                       slug: product.slug,
-                      name: product.name_ar,
+                      name: getProductName(product),
                       price: Number(product.final_price || product.price),
                       image: normalizeImageUrl(product.primary_image || product.images?.[0]?.image_url || product.images?.[0] || ""),
                       originalPrice: product.discount_percentage > 0 ? Number(product.price) : undefined,
@@ -442,15 +475,15 @@ export default function Product() {
                   className={`w-5 h-5 transition-colors ${isWishlisted ? "fill-red-500 text-red-500" : "text-gray-400"
                     }`}
                 />
-                {isWishlisted ? "مضاف للمفضلة" : "أضف للمفضلة"}
+                {isWishlisted ? t('product.addedToWishlist') : t('product.addToWishlist')}
               </button>
             </div>
           </div>
 
           {/* Related Products */}
           <section>
-            <h2 className="text-2xl font-bold text-foreground mb-6">منتجات مشابهة</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <h2 className="text-2xl font-bold text-foreground mb-6">{t('product.relatedProducts')}</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
               {relatedProducts
                 .filter((p) => p.id !== product.id)
                 .slice(0, 4)
@@ -463,18 +496,18 @@ export default function Product() {
                     <div className="relative w-full aspect-square bg-secondary overflow-hidden">
                       <img
                         src={getProductImage(relatedProduct)}
-                        alt={relatedProduct.name_ar}
+                        alt={getProductName(relatedProduct)}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                       {relatedProduct.discount_percentage > 0 && (
                         <div className="absolute top-2 left-2 bg-accent text-accent-foreground px-2 py-1 rounded-md text-xs font-bold">
-                          خصم {relatedProduct.discount_percentage}%
+                          {t('product.discount')} {relatedProduct.discount_percentage}%
                         </div>
                       )}
                     </div>
                     <div className="p-4">
                       <h3 className="font-medium text-sm text-foreground line-clamp-2 mb-2">
-                        {relatedProduct.name_ar}
+                        {getProductName(relatedProduct)}
                       </h3>
                       {/* Rating - DISABLED: Will be enabled later when review system is activated */}
                       {/* 
@@ -495,15 +528,15 @@ export default function Product() {
                       {relatedProduct.discount_percentage > 0 ? (
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-accent">
-                            {Number(relatedProduct.final_price).toLocaleString("ar-EG")} جنيه
+                            {Number(relatedProduct.final_price).toLocaleString(language === 'en' ? 'en-US' : 'ar-EG')} {t('product.egp')}
                           </span>
                           <span className="text-xs text-muted-foreground line-through">
-                            {Number(relatedProduct.price).toLocaleString("ar-EG")}
+                            {Number(relatedProduct.price).toLocaleString(language === 'en' ? 'en-US' : 'ar-EG')}
                           </span>
                         </div>
                       ) : (
                         <span className="font-bold text-foreground">
-                          {Number(relatedProduct.price).toLocaleString("ar-EG")} جنيه
+                          {Number(relatedProduct.price).toLocaleString(language === 'en' ? 'en-US' : 'ar-EG')} {t('product.egp')}
                         </span>
                       )}
                     </div>
@@ -515,6 +548,27 @@ export default function Product() {
       </main>
 
       <Footer />
+
+      {product && (
+        <QuickBuyModal
+          isOpen={showQuickBuy}
+          onClose={() => setShowQuickBuy(false)}
+          product={showQuickBuy ? {
+            id: product.id,
+            name_ar: product.name_ar,
+            name_en: product.name_en,
+            slug: product.slug,
+            price: Number(product.price),
+            final_price: Number(product.final_price || product.price),
+            discount_percentage: product.discount_percentage || 0,
+            primary_image: product.primary_image || product.images?.[0]?.image_url,
+            images: product.images,
+            available_sizes: product.available_sizes || [],
+            available_colors: product.available_colors || [],
+            stock_quantity: product.stock_quantity,
+          } : null}
+        />
+      )}
     </div>
   );
 }

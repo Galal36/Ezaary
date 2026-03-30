@@ -7,9 +7,11 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
+import { CustomerAuthProvider } from "@/contexts/CustomerAuthContext";
 import { CartProvider } from "@/contexts/CartContext";
 import { WishlistProvider } from "@/contexts/WishlistContext";
 import { AnnouncementProvider, useAnnouncement } from "@/contexts/AnnouncementContext";
+import { LanguageProvider } from "@/contexts/LanguageContext";
 import AnnouncementBar from "@/components/AnnouncementBar";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ScrollToTop from "@/components/ScrollToTop";
@@ -37,11 +39,17 @@ import AdminProductOrderManager from "./pages/admin/ProductOrderManager";
 import Checkout from "./pages/Checkout";
 import OrderConfirmation from "./pages/OrderConfirmation";
 import SearchResults from "./pages/SearchResults";
+import RegisterPage from "./pages/RegisterPage";
+import LoginPage from "./pages/LoginPage";
+import VerifyEmailPage from "./pages/VerifyEmailPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
+import ProfilePage from "./pages/ProfilePage";
 
 const queryClient = new QueryClient();
 
 const AppContent = () => {
-  const { settings } = useAnnouncement();
+  const { settings, isBarVisible } = useAnnouncement();
   
   return (
     <>
@@ -51,9 +59,9 @@ const AppContent = () => {
         speed={settings.speed}
         backgroundColor={settings.backgroundColor}
         textColor={settings.textColor}
-        enabled={settings.enabled}
+        enabled={isBarVisible}
       />
-      <div style={{ paddingTop: settings.enabled ? "2.5rem" : "0" }}>
+      <div className={isBarVisible ? "pt-10 md:pt-12" : ""}>
         <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/categories" element={<Categories />} />
@@ -65,6 +73,12 @@ const AppContent = () => {
             <Route path="/wishlist" element={<Wishlist />} />
             <Route path="/search" element={<SearchResults />} />
             <Route path="/account" element={<Account />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/verify-email" element={<VerifyEmailPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
             <Route path="/about" element={<About />} />
             <Route path="/shipping-policy" element={<ShippingPolicy />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
@@ -152,21 +166,25 @@ const AppContent = () => {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <AdminAuthProvider>
-      <CartProvider>
-        <WishlistProvider>
-          <AnnouncementProvider>
-            <TooltipProvider>
-              <Toaster />
-              <Sonner />
-              <BrowserRouter>
-                <AppContent />
-              </BrowserRouter>
-            </TooltipProvider>
-          </AnnouncementProvider>
-        </WishlistProvider>
-      </CartProvider>
-    </AdminAuthProvider>
+    <LanguageProvider>
+      <AdminAuthProvider>
+        <CustomerAuthProvider>
+        <CartProvider>
+          <WishlistProvider>
+            <AnnouncementProvider>
+              <TooltipProvider>
+                <Toaster />
+                <Sonner />
+                <BrowserRouter>
+                  <AppContent />
+                </BrowserRouter>
+              </TooltipProvider>
+            </AnnouncementProvider>
+          </WishlistProvider>
+        </CartProvider>
+        </CustomerAuthProvider>
+      </AdminAuthProvider>
+    </LanguageProvider>
   </QueryClientProvider>
 );
 

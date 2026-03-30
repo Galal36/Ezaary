@@ -48,7 +48,7 @@ export default function SearchManagement() {
     setIsLoading(true);
     try {
       // Load keywords
-      const keywordsRes = await fetch("http://localhost:8000/api/search-keywords/", {
+      const keywordsRes = await fetch("https://ezaary.com/api/search-keywords/", {
         headers: {
           "Authorization": `Token ${localStorage.getItem("admin_token")}`,
         },
@@ -57,7 +57,7 @@ export default function SearchManagement() {
       setKeywords(keywordsData.results || keywordsData || []);
 
       // Load popular searches
-      const popularRes = await fetch("http://localhost:8000/api/search-analytics/popular/?days=30", {
+      const popularRes = await fetch("https://ezaary.com/api/search-analytics/popular/?days=30", {
         headers: {
           "Authorization": `Token ${localStorage.getItem("admin_token")}`,
         },
@@ -66,7 +66,7 @@ export default function SearchManagement() {
       setPopularSearches(popularData || []);
 
       // Load zero results
-      const zeroRes = await fetch("http://localhost:8000/api/search-analytics/zero_results/", {
+      const zeroRes = await fetch("https://ezaary.com/api/search-analytics/zero_results/", {
         headers: {
           "Authorization": `Token ${localStorage.getItem("admin_token")}`,
         },
@@ -93,7 +93,7 @@ export default function SearchManagement() {
         .map((s) => s.trim())
         .filter((s) => s);
 
-      const response = await fetch("http://localhost:8000/api/search-keywords/", {
+      const response = await fetch("https://ezaary.com/api/search-keywords/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -124,7 +124,7 @@ export default function SearchManagement() {
     if (!confirm("هل أنت متأكد من حذف هذه الكلمة المفتاحية؟")) return;
 
     try {
-      const response = await fetch(`http://localhost:8000/api/search-keywords/${id}/`, {
+      const response = await fetch(`https://ezaary.com/api/search-keywords/${id}/`, {
         method: "DELETE",
         headers: {
           "Authorization": `Token ${localStorage.getItem("admin_token")}`,
@@ -145,7 +145,7 @@ export default function SearchManagement() {
 
   const handleToggleKeyword = async (keyword: SearchKeyword) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/search-keywords/${keyword.id}/`, {
+      const response = await fetch(`https://ezaary.com/api/search-keywords/${keyword.id}/`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",

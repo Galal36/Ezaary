@@ -208,17 +208,21 @@
 // ................
 
 
-import { Heart, Eye } from "lucide-react";
+import { Heart, Eye, ShoppingBag } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useCart } from "@/contexts/CartContext";
 import { useWishlist } from "@/contexts/WishlistContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
+import QuickBuyModal, { type QuickBuyProduct } from "@/components/QuickBuyModal";
 
 interface ProductCardProps {
   id: string;
   slug: string;
   name: string;
+  name_ar?: string;
+  name_en?: string;
   price: number;
   originalPrice?: number;
   image: string;
@@ -228,12 +232,16 @@ interface ProductCardProps {
   discount?: number;
   inStock?: boolean;
   stock_quantity?: number;
+  available_sizes?: string[];
+  available_colors?: string[];
 }
 
 export default function ProductCard({
   id,
   slug,
   name,
+  name_ar,
+  name_en,
   price,
   originalPrice,
   image,
@@ -243,24 +251,69 @@ export default function ProductCard({
   discount,
   inStock = true,
   stock_quantity,
+  available_sizes,
+  available_colors,
 }: ProductCardProps) {
   const [isHovered, setIsHovered] = useState(false);
-  
-  // State to handle the currently displayed image
+  const [showQuickBuy, setShowQuickBuy] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
   const [activeImage, setActiveImage] = useState(image);
+  const imgRef = useRef<HTMLImageElement>(null);
 
   const { addToCart } = useCart();
   const { addToWishlist, isInWishlist } = useWishlist();
+  const { t, language } = useLanguage();
   const isWishlisted = isInWishlist(id);
-
-  // Reset active image if the prop image changes (e.g. pagination/filtering)
-  useEffect(() => {
-    setActiveImage(image);
-  }, [image]);
 
   // Ensure 'images' prop contains the main image to avoid duplicates in logic
   const allImages = images.length > 0 ? images : [image];
   const hasMultipleImages = allImages.length > 1;
+
+  useEffect(() => {
+    setActiveImage(image);
+    setImageLoaded(false);
+  }, [image]);
+
+  // On hover, automatically switch to second image if available
+  useEffect(() => {
+    if (isHovered && hasMultipleImages) {
+      const secondImage = allImages.find(img => img !== image);
+      if (secondImage && secondImage !== image) {
+        setActiveImage(secondImage);
+      }
+    } else {
+      setActiveImage(image);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHovered, image]);
+
+  // When activeImage changes (hover or return), reset loading state
+  useEffect(() => {
+    setImageLoaded(false);
+  }, [activeImage]);
+
+  // Handle cached images: onLoad may not fire when image is served from cache (e.g. after navigating back).
+  // Check img.complete after render - if already loaded, set imageLoaded immediately.
+  useEffect(() => {
+    const img = imgRef.current;
+    if (!img) return;
+
+    const checkComplete = () => {
+      if (img.complete && img.naturalWidth > 0) {
+        setImageLoaded(true);
+        return true;
+      }
+      return false;
+    };
+
+    if (checkComplete()) return;
+
+    // Cached images can complete in the next frame - check again (fixes navigate-back loading bug)
+    const rafId = requestAnimationFrame(() => {
+      checkComplete();
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [activeImage]);
 
   // We show up to 4 thumbnails. We don't filter out the main image here, 
   // so the user can switch back to it easily.
@@ -269,7 +322,7 @@ export default function ProductCard({
   const handleAddToCart = () => {
     // Check stock availability before adding to cart
     if (stock_quantity !== undefined && stock_quantity < Infinity && stock_quantity <= 0) {
-      toast.error("المنتج غير متوفر في المخزون");
+      toast.error(t('product.outOfStock'));
       return;
     }
 
@@ -290,24 +343,32 @@ export default function ProductCard({
     <div
       className="group bg-card rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300"
       onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => {
-        setIsHovered(false);
-        setActiveImage(image); // Reset to default image on leave
-      }}
+      onMouseLeave={() => setIsHovered(false)}
     >
       {/* Image Container */}
       <div className="relative w-full aspect-square bg-secondary overflow-hidden">
         
+        {/* Image loading placeholder */}
+        {!imageLoaded && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-secondary z-[5]">
+            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2" />
+            <span className="text-xs text-muted-foreground">{language === 'en' ? 'Loading product...' : 'يتم تحميل المنتج'}</span>
+          </div>
+        )}
+
         {/* Main Image */}
         <Link to={`/product/${slug}`} className="block w-full h-full">
           <img
+            ref={imgRef}
             src={activeImage}
             alt={name}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            className={`w-full h-full object-cover transition-all duration-700 ease-in-out group-hover:scale-105 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
             loading="lazy"
             decoding="async"
+            onLoad={() => setImageLoaded(true)}
             onError={(e) => {
               (e.target as HTMLImageElement).src = '/placeholder.svg';
+              setImageLoaded(true);
             }}
           />
         </Link>
@@ -339,7 +400,7 @@ export default function ProductCard({
         {/* Discount Badge */}
         {discountPercentage > 0 && (
           <div className="absolute top-2 left-2 bg-accent text-accent-foreground px-2 py-1 rounded-md text-xs font-bold z-10">
-            خصم {discountPercentage}%
+            {t('product.discount')} {discountPercentage}%
           </div>
         )}
 
@@ -385,14 +446,14 @@ export default function ProductCard({
         {/* Stock Badge */}
         {!inStock && (
           <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-40">
-            <span className="bg-white text-black px-3 py-1 rounded-lg font-bold">غير متوفر</span>
+            <span className="bg-white text-black px-3 py-1 rounded-lg font-bold">{t('product.outOfStock')}</span>
           </div>
         )}
       </div>
 
       {/* Product Info */}
-      <div className="p-4">
-        <h3 className="font-medium text-sm md:text-base text-foreground line-clamp-2 mb-2 min-h-[2.5rem]">
+      <div className="p-3 sm:p-4">
+        <h3 className="font-medium text-xs sm:text-sm md:text-base text-foreground line-clamp-2 mb-2 min-h-[2.25rem] break-normal">
           <Link
             to={`/product/${slug}`}
             className="hover:text-primary transition-colors"
@@ -404,28 +465,60 @@ export default function ProductCard({
         <div className="mb-4">
           {originalPrice ? (
             <div className="flex items-center gap-2">
-              <span className="text-lg md:text-xl font-bold text-accent">
-                {price.toLocaleString("ar-EG")} جنيه
+              <span className="text-base sm:text-lg md:text-xl font-bold text-accent">
+                {price.toLocaleString(language === 'en' ? 'en-US' : 'ar-EG')} {t('product.egp')}
               </span>
               <span className="text-xs md:text-sm text-muted-foreground line-through">
-                {originalPrice.toLocaleString("ar-EG")} جنيه
+                {originalPrice.toLocaleString(language === 'en' ? 'en-US' : 'ar-EG')} {t('product.egp')}
               </span>
             </div>
           ) : (
-            <span className="text-lg md:text-xl font-bold text-foreground">
-              {price.toLocaleString("ar-EG")} جنيه
+            <span className="text-base sm:text-lg md:text-xl font-bold text-foreground">
+              {price.toLocaleString(language === 'en' ? 'en-US' : 'ar-EG')} {t('product.egp')}
             </span>
           )}
         </div>
 
-        <button
-          onClick={handleAddToCart}
-          disabled={!inStock}
-          className="w-full py-2 px-4 bg-primary text-primary-foreground rounded-lg font-medium text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          أضف للسلة
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleAddToCart}
+            disabled={!inStock}
+            className="flex-1 py-2 px-2 sm:px-3 bg-primary text-primary-foreground rounded-lg font-medium text-xs sm:text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {t('product.addToCart')}
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowQuickBuy(true);
+            }}
+            disabled={!inStock}
+            className="py-2 px-2 sm:px-3 bg-accent text-accent-foreground rounded-lg font-medium text-xs sm:text-sm hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title={language === 'en' ? 'Buy Now' : 'اشتري الآن'}
+          >
+            <ShoppingBag className="w-4 h-4" />
+          </button>
+        </div>
       </div>
+
+      <QuickBuyModal
+        isOpen={showQuickBuy}
+        onClose={() => setShowQuickBuy(false)}
+        product={showQuickBuy ? {
+          id,
+          name_ar: name_ar || name,
+          name_en: name_en,
+          slug,
+          price: originalPrice || price,
+          final_price: price,
+          discount_percentage: discount || 0,
+          primary_image: image,
+          images: images?.map(img => ({ image_url: img })),
+          available_sizes: available_sizes || [],
+          available_colors: available_colors || [],
+          stock_quantity,
+        } : null}
+      />
     </div>
   );
 }

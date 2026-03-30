@@ -30,6 +30,13 @@ const colors = [
   { name: "رمادي", hex: "#6b7280" },
   { name: "أحمر", hex: "#ef4444" },
   { name: "أخضر", hex: "#10b981" },
+  // Existing (already in DB in some products)
+  { name: "كحلي", hex: "#1e3a8a" },
+  { name: "بيج", hex: "#d6c7a1" },
+  // New colors
+  { name: "برجاندي", hex: "#800020" },
+  { name: "بني", hex: "#8B4513" },
+  { name: "زيتي", hex: "#556B2F" },
 ];
 
 export default function ProductForm({ product, onClose }: ProductFormProps) {
@@ -69,7 +76,9 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
   } = useForm({
     defaultValues: {
       name: product?.name || "",
+      name_en: product?.name_en || "",
       description: product?.description || "",
+      description_en: product?.description_en || "",
       categoryId: product?.categoryId || "",
       sku: product?.sku || "",
       slug: product?.slug || "",
@@ -107,7 +116,9 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
       setSelectedColors(Array.isArray(colors) ? colors : (colors ? [colors] : []));
       
       setValue("name", product.name || "");
+      setValue("name_en", product.name_en || "");
       setValue("description", product.description || "");
+      setValue("description_en", product.description_en || "");
       setValue("categoryId", product.categoryId || "");
       setValue("sku", product.sku || "");
       setValue("slug", product.slug || "");
@@ -339,9 +350,11 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
     if (files && files.length > 0) {
       setIsUploading(true);
       try {
-        const uploadPromises = Array.from(files).map((file) =>
-          products.uploadImage(file)
-        );
+        const uploadPromises = Array.from(files).map(async (file) => {
+          // Compress image before upload
+          const compressedFile = await compressImage(file);
+          return products.uploadImage(compressedFile);
+        });
         const results = await Promise.all(uploadPromises);
         setImages((prev) => [...prev, ...results.map(r => r.url)]);
       } catch (error) {
@@ -351,6 +364,87 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
         setIsUploading(false);
       }
     }
+  };
+
+  // Native image compression using Canvas API
+  const compressImage = (file: File): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      // If file is already small (< 1MB), no need to compress
+      if (file.size < 1024 * 1024) {
+        resolve(file);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          if (!ctx) {
+            reject(new Error('Failed to get canvas context'));
+            return;
+          }
+
+          // Calculate new dimensions (max 1920px width/height while maintaining aspect ratio)
+          let width = img.width;
+          let height = img.height;
+          const maxDimension = 1920;
+
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = (height * maxDimension) / width;
+              width = maxDimension;
+            } else {
+              width = (width * maxDimension) / height;
+              height = maxDimension;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          // Draw image on canvas with high quality
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Convert to blob with compression (0.85 quality for good balance)
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                reject(new Error('Failed to compress image'));
+                return;
+              }
+
+              // Create new file from blob
+              const compressedFile = new File([blob], file.name, {
+                type: 'image/jpeg',
+                lastModified: Date.now(),
+              });
+
+              console.log(`Image compressed: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${(compressedFile.size / 1024 / 1024).toFixed(2)}MB`);
+              resolve(compressedFile);
+            },
+            'image/jpeg',
+            0.85 // Quality: 0.85 provides good balance between size and quality
+          );
+        };
+
+        img.onerror = () => {
+          reject(new Error('Failed to load image'));
+        };
+      };
+
+      reader.onerror = () => {
+        reject(new Error('Failed to read file'));
+      };
+    });
   };
 
   const handleRemoveImage = (index: number) => {
@@ -380,9 +474,10 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
       
       const productData: any = {
         name_ar: data.name,
-        name_en: data.name, // Using same name for EN for now, or add field
+        name_en: data.name_en,
         sku: data.sku,
         description_ar: data.description,
+        description_en: data.description_en,
         price: data.price,
         discount_percentage: data.discountPercentage,
         category: data.categoryId,
@@ -394,12 +489,15 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
         is_active: true
       };
 
-      // Include slug only if provided (for new products, backend will auto-generate if empty)
-      if (data.slug && data.slug.trim()) {
-        productData.slug = data.slug.trim();
-      } else if (product) {
-        // For existing products, slug is required
-        productData.slug = product.slug;
+      // Slug handling (production-safe):
+      // - On create: omit slug unless user explicitly entered one (backend will auto-generate).
+      // - On edit: only send slug if it was changed by the admin.
+      const submittedSlug = (data.slug || "").trim();
+      const existingSlug = (product?.slug || "").trim();
+      if (submittedSlug) {
+        if (!product || submittedSlug !== existingSlug) {
+          productData.slug = submittedSlug;
+        }
       }
 
       console.log("Saving product with colors:", colorsArray); // Debug log
@@ -440,13 +538,13 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
         <h3 className="text-lg font-bold text-foreground">معلومات أساسية</h3>
         <div>
           <Label htmlFor="name">
-            اسم المنتج <span className="text-red-500">*</span>
+            اسم المنتج (بالعربية) <span className="text-red-500">*</span>
           </Label>
           <Input
             id="name"
             {...register("name", { required: "اسم المنتج مطلوب" })}
             className="mt-2"
-            placeholder="أدخل اسم المنتج"
+            placeholder="أدخل اسم المنتج بالعربية"
           />
           {errors.name && (
             <p className="text-sm text-red-500 mt-1">
@@ -456,13 +554,38 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
         </div>
 
         <div>
-          <Label htmlFor="description">الوصف المختصر</Label>
+          <Label htmlFor="name_en">
+            Product Name (English)
+          </Label>
+          <Input
+            id="name_en"
+            {...register("name_en")}
+            className="mt-2"
+            placeholder="Enter product name in English"
+            dir="ltr"
+          />
+        </div>
+
+        <div>
+          <Label htmlFor="description">الوصف المختصر (بالعربية)</Label>
           <Textarea
             id="description"
             {...register("description")}
             className="mt-2"
             rows={2}
-            placeholder="وصف مختصر للمنتج"
+            placeholder="وصف مختصر للمنتج بالعربية"
+          />
+        </div>
+
+        <div>
+          <Label htmlFor="description_en">Product Description (English)</Label>
+          <Textarea
+            id="description_en"
+            {...register("description_en")}
+            className="mt-2"
+            rows={2}
+            placeholder="Brief product description in English"
+            dir="ltr"
           />
         </div>
 
@@ -501,12 +624,11 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
 
         <div>
           <Label htmlFor="slug">
-            رابط المنتج (Slug) {product && <span className="text-red-500">*</span>}
+            رابط المنتج (Slug) <span className="text-xs text-gray-500">(اختياري)</span>
           </Label>
           <Input
             id="slug"
             {...register("slug", { 
-              required: product ? "رابط المنتج مطلوب" : false,
               validate: (value) => {
                 // If provided, validate format
                 if (value && value.trim().length > 0) {
@@ -519,7 +641,7 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
               }
             })}
             className="mt-2"
-            placeholder={product ? "product-slug-example" : "اتركه فارغاً ليتم إنشاؤه تلقائياً من اسم المنتج"}
+            placeholder="اتركه فارغاً ليتم إنشاؤه تلقائياً من اسم المنتج"
             dir="ltr"
           />
           {errors.slug && (
@@ -528,9 +650,7 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
             </p>
           )}
           <p className="text-xs text-muted-foreground mt-1">
-            {product 
-              ? "رابط المنتج في الـ API (مثال: /api/products/your-slug-here/)"
-              : "إذا تركت الحقل فارغاً، سيتم إنشاء الرابط تلقائياً من اسم المنتج"}
+            سيتم إنشاء الرابط تلقائياً من اسم المنتج إذا تركت الحقل فارغاً
           </p>
         </div>
       </div>

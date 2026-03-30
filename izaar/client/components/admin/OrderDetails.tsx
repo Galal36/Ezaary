@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { X, Phone, Mail, MapPin, Printer, MessageSquare } from "lucide-react";
+import { X, Phone, Mail, MapPin, Printer, MessageSquare, Download, CreditCard } from "lucide-react";
 
 // Define compatible interfaces matching Orders.tsx
 interface OrderProduct {
@@ -44,6 +44,8 @@ interface Order {
   updatedAt?: string;
   products: OrderProduct[];
   notes?: string;
+  payment_method?: string; // Payment method
+  payment_screenshot?: string; // Payment screenshot URL
 }
 
 interface OrderDetailsProps {
@@ -80,6 +82,12 @@ const statusLabels: Record<string, string> = {
   out_for_delivery: "قيد التوصيل",
   delivered: "تم التوصيل",
   cancelled: "ملغي",
+};
+
+const paymentMethodLabels: Record<string, string> = {
+  cash_on_delivery: "دفع عند الاستلام",
+  vodafone_cash: "فودافون كاش",
+  instapay: "انستاباي",
 };
 
 export default function OrderDetails({ order, onClose, onUpdate }: OrderDetailsProps) {
@@ -264,6 +272,54 @@ export default function OrderDetails({ order, onClose, onUpdate }: OrderDetailsP
                 {order.total.toLocaleString("ar-EG")} جنيه
               </span>
             </div>
+            
+            {/* Payment Method */}
+            {order.payment_method && (
+              <div className="border-t border-gray-200 pt-3 mt-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <CreditCard className="w-4 h-4 text-blue-600" />
+                  <span className="font-bold text-foreground">طريقة الدفع</span>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <span className="font-medium text-blue-900">
+                    {paymentMethodLabels[order.payment_method] || order.payment_method}
+                  </span>
+                </div>
+              </div>
+            )}
+            
+            {/* Payment Screenshot */}
+            {order.payment_screenshot && (
+              <div className="border-t border-gray-200 pt-3 mt-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Download className="w-4 h-4 text-green-600" />
+                  <span className="font-bold text-foreground">صورة إثبات الدفع</span>
+                </div>
+                <div className="bg-white border-2 border-green-200 rounded-lg p-2">
+                  <a 
+                    href={order.payment_screenshot.startsWith('http') ? order.payment_screenshot : `https://ezaary.com${order.payment_screenshot}`}
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="block"
+                  >
+                    <img
+                      src={order.payment_screenshot.startsWith('http') ? order.payment_screenshot : `https://ezaary.com${order.payment_screenshot}`}
+                      alt="Payment Screenshot"
+                      className="w-full h-48 object-contain rounded border border-gray-200 hover:border-green-400 transition-colors cursor-pointer"
+                    />
+                  </a>
+                  <a
+                    href={order.payment_screenshot.startsWith('http') ? order.payment_screenshot : `https://ezaary.com${order.payment_screenshot}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm font-medium"
+                  >
+                    <Download className="w-4 h-4" />
+                    تحميل الصورة كاملة
+                  </a>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

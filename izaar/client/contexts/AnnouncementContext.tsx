@@ -18,15 +18,21 @@ interface AnnouncementSettings {
 
 interface AnnouncementContextType {
   settings: AnnouncementSettings;
+  isBarVisible: boolean;
   updateSettings: (settings: Partial<AnnouncementSettings>) => void;
   addAnnouncement: (announcement: Omit<Announcement, "id">) => void;
   updateAnnouncement: (id: string, announcement: Partial<Announcement>) => void;
   deleteAnnouncement: (id: string) => void;
+  closeBar: (hours?: number) => void;
   loadSettings: () => Promise<void>;
   saveSettings: () => Promise<void>;
 }
 
 const AnnouncementContext = createContext<AnnouncementContextType | undefined>(undefined);
+
+// Versioned key so if users previously closed the bar, new deployments can show it again.
+// Also avoids "invisible bar but reserved gap" issues when the close state isn't shared.
+const ANNOUNCEMENT_BAR_CLOSED_UNTIL_KEY = "announcement_bar_closed_until_v2";
 
 const defaultSettings: AnnouncementSettings = {
   enabled: true,
@@ -49,11 +55,17 @@ const defaultSettings: AnnouncementSettings = {
       text: "خامات ممتازة وجودة مضمونة",
       enabled: true,
     },
+    {
+      id: "5",
+      text: "الحق تصفيات الشتاء لخامات عالية، الكمية محدودة",
+      enabled: true,
+    },
   ],
 };
 
 export const AnnouncementProvider = ({ children }: { children: ReactNode }) => {
   const [settings, setSettings] = useState<AnnouncementSettings>(defaultSettings);
+  const [isClosed, setIsClosed] = useState(false);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -67,6 +79,33 @@ export const AnnouncementProvider = ({ children }: { children: ReactNode }) => {
       }
     }
   }, []);
+
+  // Load "closed until" state on mount (guarded for SSR safety)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const closedUntil = window.localStorage.getItem(ANNOUNCEMENT_BAR_CLOSED_UNTIL_KEY);
+      if (!closedUntil) return;
+      const closedDate = new Date(closedUntil);
+      if (closedDate > new Date()) {
+        setIsClosed(true);
+      } else {
+        window.localStorage.removeItem(ANNOUNCEMENT_BAR_CLOSED_UNTIL_KEY);
+      }
+    } catch {
+      // ignore localStorage errors
+    }
+  }, []);
+
+  const activeAnnouncements = settings.announcements.filter((announcement) => {
+    if (!announcement.enabled) return false;
+    const now = new Date();
+    if (announcement.startDate && new Date(announcement.startDate) > now) return false;
+    if (announcement.endDate && new Date(announcement.endDate) < now) return false;
+    return true;
+  });
+
+  const isBarVisible = settings.enabled && !isClosed && activeAnnouncements.length > 0;
 
   // Save to localStorage whenever settings change
   useEffect(() => {
@@ -104,6 +143,18 @@ export const AnnouncementProvider = ({ children }: { children: ReactNode }) => {
     }));
   };
 
+  const closeBar = (hours: number = 24) => {
+    setIsClosed(true);
+    if (typeof window === "undefined") return;
+    try {
+      const until = new Date();
+      until.setHours(until.getHours() + hours);
+      window.localStorage.setItem(ANNOUNCEMENT_BAR_CLOSED_UNTIL_KEY, until.toISOString());
+    } catch {
+      // ignore localStorage errors
+    }
+  };
+
   const loadSettings = async () => {
     // In the future, this can load from backend API
     const saved = localStorage.getItem("izaar_announcement_settings");
@@ -126,10 +177,12 @@ export const AnnouncementProvider = ({ children }: { children: ReactNode }) => {
     <AnnouncementContext.Provider
       value={{
         settings,
+        isBarVisible,
         updateSettings,
         addAnnouncement,
         updateAnnouncement,
         deleteAnnouncement,
+        closeBar,
         loadSettings,
         saveSettings,
       }}

@@ -74,7 +74,7 @@ export default function SearchBar() {
     setIsLoading(true);
     try {
       const response = await fetch(
-        `http://localhost:8000/api/search/search/?q=${encodeURIComponent(searchQuery)}&limit=10`,
+        `https://ezaary.com/api/search/search/?q=${encodeURIComponent(searchQuery)}&limit=10`,
         {
           headers: {
             "Content-Type": "application/json",

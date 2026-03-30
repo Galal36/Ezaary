@@ -249,13 +249,13 @@ export const normalizeImageUrl = (url: string | null | undefined): string => {
   
   // If it's a relative path starting with /media, prepend backend URL
   if (url.startsWith('/media/') || url.startsWith('media/')) {
-    const backendUrl = 'http://localhost:8000';
+    const backendUrl = 'https://ezaary.com';
     return url.startsWith('/') ? `${backendUrl}${url}` : `${backendUrl}/${url}`;
   }
   
   // If it's a relative path, prepend backend URL and /media
   if (url.startsWith('/')) {
-    return `http://localhost:8000${url}`;
+    return `https://ezaary.com${url}`;
   }
   
   return url;
@@ -265,6 +265,7 @@ export const normalizeImageUrl = (url: string | null | undefined): string => {
 export const mapBackendProduct = (product: any) => ({
   id: product.id,
   name: product.name_ar,
+  name_en: product.name_en,
   price: parseFloat(product.final_price || product.price),
   originalPrice: product.discount_percentage > 0 ? parseFloat(product.price) : undefined,
   image: normalizeImageUrl(product.primary_image || product.image_url),
@@ -273,6 +274,7 @@ export const mapBackendProduct = (product: any) => ({
   category: product.category_name || '',
   categoryId: product.category || '',
   description: product.description_ar || '',
+  description_en: product.description_en,
   discount: product.discount_percentage || 0,
   inStock: product.is_in_stock,
   slug: product.slug,
@@ -285,8 +287,10 @@ export const mapBackendProduct = (product: any) => ({
 export const mapBackendProductToAdmin = (product: any) => ({
   id: product.id,
   name: product.name_ar,
+  name_en: product.name_en,
   sku: product.sku,
   description: product.description_ar || '',
+  description_en: product.description_en || '',
   categoryId: product.category,
   categoryName: product.category_name || '',
   price: parseFloat(product.price),
@@ -302,9 +306,11 @@ export const mapBackendProductToAdmin = (product: any) => ({
 
 export const mapFrontendProductToBackend = (product: any) => ({
   name_ar: product.name,
+  name_en: product.name_en,
   sku: product.sku,
   slug: product.slug || product.sku?.toLowerCase().replace(/\s+/g, '-'),
   description_ar: product.description,
+  description_en: product.description_en,
   category: product.categoryId,
   price: product.price,
   discount_percentage: product.discountPercentage || 0,

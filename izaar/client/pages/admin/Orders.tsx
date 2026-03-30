@@ -36,6 +36,8 @@ interface OrderProduct {
   quantity: number;
   price: number;
   image?: string;
+  size?: string;
+  color?: string;
 }
 
 interface Order {
@@ -55,6 +57,8 @@ interface Order {
   email?: string;
   address?: string;
   notes?: string;
+  payment_method?: string;
+  payment_screenshot?: string;
 }
 
 const statusOptions = [
@@ -151,11 +155,15 @@ export default function AdminOrders() {
           name: item.product_name_ar,
           quantity: item.quantity,
           price: parseFloat(item.unit_price),
-          image: item.product // Ensure we handle image if accessible
+          image: item.product_image || item.product, // Use product_image from serializer, fallback to product ID (which was previous wrong behavior but keeping as fallback)
+          size: item.selected_size,
+          color: item.selected_color
         })),
         email: apiOrder.customer_email,
         address: [apiOrder.governorate, apiOrder.district, apiOrder.village, apiOrder.detailed_address].filter(Boolean).join(" - "),
-        notes: apiOrder.customer_notes
+        notes: apiOrder.customer_notes,
+        payment_method: apiOrder.payment_method,
+        payment_screenshot: apiOrder.payment_screenshot
       }));
 
       setOrders(mappedOrders);
@@ -202,58 +210,67 @@ export default function AdminOrders() {
   return (
     <AdminLayout>
       {/* Page Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground mb-2">إدارة الطلبات</h1>
-        <p className="text-muted-foreground">عرض وإدارة جميع طلبات العملاء</p>
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">إدارة الطلبات</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">عرض وإدارة جميع طلبات العملاء</p>
       </div>
 
       {/* Filters & Search */}
-      <div className="bg-white rounded-lg shadow p-6 mb-6">
-        <div className="flex flex-col md:flex-row gap-4">
+      <div className="bg-white rounded-lg shadow p-4 sm:p-6 mb-6">
+        <div className="flex flex-col gap-3 sm:gap-4">
           {/* Search */}
-          <div className="flex-1 relative">
+          <div className="relative">
             <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <Input
               placeholder="ابحث برقم الطلب أو اسم العميل..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pr-10"
+              className="pr-10 h-11 text-base"
             />
           </div>
 
-          {/* Status Filter */}
-          <Select
-            value={statusFilter}
-            onValueChange={(value) => {
-              setStatusFilter(value);
-              setCurrentPage(1);
-            }}
-          >
-            <SelectTrigger className="w-full md:w-[180px]">
-              <SelectValue placeholder="الحالة" />
-            </SelectTrigger>
-            <SelectContent>
-              {statusOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Status Filter and Reset Button */}
+          <div className="flex gap-3">
+            {/* Status Filter */}
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => {
+                setStatusFilter(value);
+                setCurrentPage(1);
+              }}
+            >
+              <SelectTrigger className="flex-1 h-11">
+                <SelectValue placeholder="الحالة" />
+              </SelectTrigger>
+              <SelectContent>
+                {statusOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          {/* Reset Button */}
-          {hasActiveFilters && (
-            <Button variant="outline" onClick={handleResetFilters}>
-              <X className="w-4 h-4 ml-2" />
-              إعادة تعيين
-            </Button>
-          )}
+            {/* Reset Button */}
+            {hasActiveFilters && (
+              <Button
+                variant="outline"
+                onClick={handleResetFilters}
+                className="h-11 px-4 whitespace-nowrap"
+              >
+                <X className="w-4 h-4 ml-2" />
+                <span className="hidden sm:inline">إعادة تعيين</span>
+                <span className="sm:hidden">إعادة</span>
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Orders Table */}
+      {/* Orders Table - Desktop View */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Desktop Table - Hidden on Mobile */}
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
@@ -283,7 +300,7 @@ export default function AdminOrders() {
                 orders.map((order) => (
                   <tr key={order.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 text-sm font-medium text-foreground">
-                      #{order.id.split('-').slice(1).join('-')}
+                      #{order.orderNumber}
                     </td>
                     <td className="px-6 py-4 text-sm">
                       <div className="font-medium text-foreground">{order.customerName}</div>
@@ -325,18 +342,103 @@ export default function AdminOrders() {
           </table>
         </div>
 
+        {/* Mobile Card View - Shown only on Mobile */}
+        <div className="lg:hidden">
+          {loading ? (
+            <div className="px-6 py-12 text-center">
+              <div className="flex justify-center"><Loader2 className="animate-spin h-6 w-6 text-primary" /></div>
+            </div>
+          ) : orders.length === 0 ? (
+            <div className="px-6 py-12 text-center">
+              <p className="text-muted-foreground">لا توجد طلبات مطابقة للبحث</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-200">
+              {orders.map((order) => (
+                <div
+                  key={order.id}
+                  className="p-4 hover:bg-gray-50 transition-colors"
+                  onClick={() => handleViewOrder(order)}
+                >
+                  {/* Order Header */}
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <div className="text-sm font-semibold text-gray-900">
+                        #{order.orderNumber}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {new Date(order.createdAt).toLocaleDateString("ar-EG", {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </div>
+                    </div>
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[order.status] || "bg-gray-100 text-gray-800"}`}>
+                      {statusLabels[order.status] || order.status}
+                    </span>
+                  </div>
+
+                  {/* Customer Info */}
+                  <div className="space-y-1.5 mb-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">العميل:</span>
+                      <span className="font-medium text-gray-900">{order.customerName}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">الهاتف:</span>
+                      <span className="font-medium text-gray-900 dir-ltr text-right">{order.phone}</span>
+                    </div>
+                    {order.governorate && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">المحافظة:</span>
+                        <span className="font-medium text-gray-900">{order.governorate}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Order Summary */}
+                  <div className="flex justify-between items-center pt-3 border-t border-gray-100">
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <span>{order.products.length} منتج</span>
+                    </div>
+                    <div className="text-base font-bold text-primary">
+                      {order.total.toLocaleString("ar-EG")} جنيه
+                    </div>
+                  </div>
+
+                  {/* View Details Indicator */}
+                  <div className="mt-3 flex items-center justify-center">
+                    <button
+                      className="text-sm text-primary hover:text-primary/80 flex items-center gap-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleViewOrder(order);
+                      }}
+                    >
+                      <Eye className="w-4 h-4" />
+                      عرض التفاصيل
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
+          <div className="px-4 sm:px-6 py-4 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="text-sm text-muted-foreground order-2 sm:order-1">
               صفحة {currentPage} من {totalPages}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 order-1 sm:order-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
+                className="h-10 min-w-[100px]"
               >
                 <ChevronRight className="w-4 h-4" />
                 السابق
@@ -346,6 +448,7 @@ export default function AdminOrders() {
                 size="sm"
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
+                className="h-10 min-w-[100px]"
               >
                 التالي
                 <ChevronLeft className="w-4 h-4" />

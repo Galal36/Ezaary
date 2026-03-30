@@ -343,7 +343,10 @@ export default function CategoryProducts() {
       <div className="w-full min-h-screen flex flex-col bg-background">
         <Header />
         <main className="flex-1 flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <span className="text-muted-foreground text-sm">يتم تحميل الصفحة</span>
+          </div>
         </main>
         <Footer />
       </div>
@@ -433,13 +436,15 @@ export default function CategoryProducts() {
         <section className="max-w-7xl mx-auto px-4 lg:px-8 py-12 md:py-16">
           {products.length > 0 ? (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-12">
                 {products.slice(0, visibleCount).map((product: any) => (
                   <ProductCard
                     key={product.id}
                     id={product.id}
                     slug={product.slug}
                     name={product.name_ar}
+                    name_ar={product.name_ar}
+                    name_en={product.name_en}
                     price={Number(product.final_price || product.price)}
                     originalPrice={
                       product.discount_percentage > 0 && product.final_price
@@ -453,6 +458,8 @@ export default function CategoryProducts() {
                     discount={product.discount_percentage}
                     inStock={product.is_in_stock}
                     stock_quantity={product.stock_quantity}
+                    available_sizes={product.available_sizes}
+                    available_colors={product.available_colors}
                   />
                 ))}
               </div>

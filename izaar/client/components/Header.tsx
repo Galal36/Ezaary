@@ -1,36 +1,35 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ShoppingCart, Heart, User, Menu, X } from "lucide-react";
+import { ShoppingCart, Heart, User, Menu, X, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/contexts/CartContext";
 import { useWishlist } from "@/contexts/WishlistContext";
 import { useAnnouncement } from "@/contexts/AnnouncementContext";
-import SearchBar from "@/components/SearchBar";
+import { useCustomerAuth } from "@/contexts/CustomerAuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [customerMenuOpen, setCustomerMenuOpen] = useState(false);
   const { getTotalItems } = useCart();
+  const { isAuthenticated, customer, logout } = useCustomerAuth();
   const cartCount = getTotalItems();
   const { getTotalItems: getWishlistCount } = useWishlist();
   const wishlistCount = getWishlistCount();
-  const { settings } = useAnnouncement();
-  
-  // Calculate top position based on announcement bar
-  // Announcement bar is h-10 (2.5rem/40px) on mobile and h-12 (3rem/48px) on desktop
-  // We use responsive positioning to match
-  const announcementBarHeight = settings.enabled ? "2.5rem" : "0"; // md:3rem handled via CSS
+  const { settings, isBarVisible } = useAnnouncement();
+  const { t } = useLanguage();
 
   const navLinks = [
-    { label: "الرئيسية", href: "/" },
-    { label: "الفئات", href: "/categories" },
-    { label: "من نحن", href: "/about" },
-    { label: "الخصوصية", href: "/privacy-policy" },
-    { label: "سياسات التوصيل والاسترداد", href: "/shipping-policy" },
+    { label: t('nav.home'), href: "/" },
+    { label: t('nav.categories'), href: "/categories" },
+    { label: t('footer.aboutUs'), href: "/about" },
+    { label: t('footer.privacyPolicy'), href: "/privacy-policy" },
+    { label: t('footer.shippingPolicy'), href: "/shipping-policy" },
   ];
 
   return (
     <header 
-      className={`sticky z-40 w-full border-b border-border bg-card shadow-sm ${settings.enabled ? 'top-10 md:top-12' : 'top-0'}`}
+      className={`sticky z-40 w-full border-b border-border bg-card shadow-sm ${isBarVisible ? 'top-10 md:top-12' : 'top-0'}`}
     >
       <div className="w-full">
         {/* Main Header */}
@@ -43,11 +42,6 @@ export default function Header() {
             >
               إزاري
             </Link>
-
-            {/* Search Bar - Desktop */}
-            <div className="hidden md:flex flex-1 max-w-md mx-4">
-              <SearchBar />
-            </div>
 
             {/* Right Side Icons */}
             <div className="flex items-center gap-2 lg:gap-4">
@@ -77,13 +71,55 @@ export default function Header() {
                 )}
               </Link>
 
-              {/* Account Icon */}
-              <Link
-                to="/account"
-                className="p-2 rounded-lg hover:bg-secondary transition-colors hidden sm:block"
-              >
-                <User className="w-5 h-5 lg:w-6 lg:h-6 text-foreground" />
-              </Link>
+              {/* Account - Login or Customer dropdown */}
+              {isAuthenticated && customer ? (
+                <div className="relative hidden sm:block">
+                  <button
+                    onClick={() => setCustomerMenuOpen(!customerMenuOpen)}
+                    className="flex items-center gap-2 p-2 rounded-lg hover:bg-secondary transition-colors"
+                  >
+                    <User className="w-5 h-5 lg:w-6 lg:h-6 text-foreground" />
+                    <span className="max-w-[80px] truncate font-medium">
+                      {customer.first_name}
+                    </span>
+                  </button>
+                  {customerMenuOpen && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setCustomerMenuOpen(false)}
+                      />
+                      <div className="absolute right-0 top-full mt-1 py-2 w-48 bg-card border border-border rounded-lg shadow-lg z-50">
+                        <Link
+                          to="/profile"
+                          className="block px-4 py-2 text-sm hover:bg-secondary transition-colors"
+                          onClick={() => setCustomerMenuOpen(false)}
+                        >
+                          حسابي
+                        </Link>
+                        <button
+                          onClick={() => {
+                            logout();
+                            setCustomerMenuOpen(false);
+                          }}
+                          className="w-full text-right px-4 py-2 text-sm hover:bg-secondary transition-colors flex items-center gap-2"
+                        >
+                          <LogOut className="w-4 h-4" />
+                          تسجيل الخروج
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <Link
+                  to="/login"
+                  className="flex items-center gap-1 p-2 rounded-lg hover:bg-secondary transition-colors hidden sm:flex"
+                >
+                  <User className="w-5 h-5 lg:w-6 lg:h-6 text-foreground" />
+                  <span className="text-sm font-medium">تسجيل الدخول</span>
+                </Link>
+              )}
 
               {/* Mobile Menu Toggle */}
               <button
@@ -98,11 +134,6 @@ export default function Header() {
               </button>
             </div>
           </div>
-
-          {/* Search Bar - Mobile */}
-          <div className="md:hidden mt-4">
-            <SearchBar />
-          </div>
         </div>
 
         {/* Desktop Navigation */}
@@ -112,7 +143,7 @@ export default function Header() {
               <Link
                 key={link.href}
                 to={link.href}
-                className="py-3 px-2 text-sm font-medium text-foreground hover:text-primary transition-colors relative group"
+                className="py-3 px-2 text-sm font-medium text-foreground hover:text-primary transition-colors relative group break-normal"
               >
                 {link.label}
                 <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary transition-all duration-300 group-hover:w-full" />
@@ -129,12 +160,40 @@ export default function Header() {
                 <Link
                   key={link.href}
                   to={link.href}
-                  className="block py-2 px-4 text-sm font-medium text-foreground hover:bg-secondary rounded-lg transition-colors"
+                  className="block py-2 px-4 text-sm font-medium text-foreground hover:bg-secondary rounded-lg transition-colors break-normal"
                   onClick={() => setIsMenuOpen(false)}
                 >
                   {link.label}
                 </Link>
               ))}
+              {isAuthenticated ? (
+                <>
+                  <Link
+                    to="/profile"
+                    className="block py-2 px-4 text-sm font-medium text-foreground hover:bg-secondary rounded-lg transition-colors"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    حسابي
+                  </Link>
+                  <button
+                    onClick={() => {
+                      logout();
+                      setIsMenuOpen(false);
+                    }}
+                    className="block w-full text-right py-2 px-4 text-sm font-medium text-foreground hover:bg-secondary rounded-lg transition-colors"
+                  >
+                    تسجيل الخروج
+                  </button>
+                </>
+              ) : (
+                <Link
+                  to="/login"
+                  className="block py-2 px-4 text-sm font-medium text-foreground hover:bg-secondary rounded-lg transition-colors"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  تسجيل الدخول
+                </Link>
+              )}
             </div>
           </nav>
         )}

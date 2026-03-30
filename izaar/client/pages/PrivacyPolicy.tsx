@@ -1,7 +1,10 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function PrivacyPolicy() {
+  const { t } = useLanguage();
+  
   return (
     <div className="w-full min-h-screen flex flex-col bg-background">
       <Header />
@@ -10,7 +13,7 @@ export default function PrivacyPolicy() {
         {/* Page Header */}
         <section className="bg-primary text-primary-foreground py-12 md:py-16">
           <div className="max-w-7xl mx-auto px-4 lg:px-8">
-            <h1 className="text-4xl md:text-5xl font-tajawal font-bold text-center">الخصوصية</h1>
+            <h1 className="text-4xl md:text-5xl font-tajawal font-bold text-center">{t('privacy.title')}</h1>
           </div>
         </section>
 
@@ -20,28 +23,28 @@ export default function PrivacyPolicy() {
             {/* First Paragraph */}
             <div className="bg-card border border-border rounded-lg p-6 md:p-8 shadow-sm">
               <p className="text-base md:text-lg font-cairo text-foreground leading-relaxed">
-                يقوم المتجر الإلكتروني بالتعامل بشكل احترافي مع مستخدميه من خلال توضيح جميع النقاط التي يلزم للمشتري معرفته، ونهتم بكل تفاصيل الطلب من حين تفعيله وطلبه إلي توصيله وكذلك الخدمات في ما بعد البيع.
+                {t('privacy.paragraph1')}
               </p>
             </div>
 
             {/* Second Paragraph */}
             <div className="bg-card border border-border rounded-lg p-6 md:p-8 shadow-sm">
               <p className="text-base md:text-lg font-cairo text-foreground leading-relaxed">
-                كذلك تبني إزاري الهيكل العام للمتجر بشكل يرضي جميع العملاء حيث ينبغي للعميل فتح بضاعته ومعاينتها عند الإستلام ولا مانع إذا لم يجد ما طلبه موجودا أن يرد الطلب، مع اشتراط عند الاسترداد دفع مصاريف الشحن إلا إذا كان الطلب بشكل خاطيء من المتجر فحينها تتحمل إزاري مصاريف الشحن.
+                {t('privacy.paragraph2')}
               </p>
             </div>
 
             {/* Third Paragraph */}
             <div className="bg-card border border-border rounded-lg p-6 md:p-8 shadow-sm">
               <p className="text-base md:text-lg font-cairo text-foreground leading-relaxed">
-                ينبغي عليك إضافة رقم الهاتف والبريد الإلكتروني - يعتبر البريد ضروريا أيضا لأنه يرسل عليه رابط تقييم المنتج الذي اشتريته.
+                {t('privacy.paragraph3')}
               </p>
             </div>
 
             {/* Fourth Paragraph */}
             <div className="bg-card border border-border rounded-lg p-6 md:p-8 shadow-sm">
               <p className="text-base md:text-lg font-cairo text-foreground leading-relaxed">
-                بعض المنتجات لا تكون ملكا للموقع نفسه ولكن قد يعرض أصحاب المتاجر بضائعهم علي المتجر الخاص بنا ويكون للمتجر نسبة من الكسب. كذلك بعض العلامات التجارية التي تكون موجودة قد لا تكون مملوكة للمتجر، لكن يوجد تيسيرات للمتجر أن يشتريها في حال وجود طلب عليها.
+                {t('privacy.paragraph4')}
               </p>
             </div>
           </div>

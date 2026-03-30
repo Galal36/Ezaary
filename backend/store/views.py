@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status, filters, serializers
+from rest_framework.views import APIView
 from rest_framework.decorators import action, api_view, permission_classes, parser_classes
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from rest_framework.authtoken.models import Token
@@ -9,24 +10,60 @@ from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 import os
+import io
+import logging
+import secrets
+from PIL import Image as PILImage
 from django.conf import settings
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
+from django.contrib.auth.hashers import make_password, check_password
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
+
+logger = logging.getLogger(__name__)
+
+
+def compress_image_to_webp(uploaded_file, max_size=1200, quality=82):
+    """Compress an uploaded image to WebP format, returning (ContentFile, filename_with_webp_ext)."""
+    try:
+        img = PILImage.open(uploaded_file)
+        if img.mode in ('RGBA', 'P'):
+            img = img.convert('RGB')
+        img.thumbnail((max_size, max_size), PILImage.LANCZOS)
+        buffer = io.BytesIO()
+        img.save(buffer, format='WEBP', quality=quality)
+        buffer.seek(0)
+        return ContentFile(buffer.read()), True
+    except Exception as e:
+        logger.warning(f"Image compression failed, saving original: {e}")
+        uploaded_file.seek(0)
+        return ContentFile(uploaded_file.read()), False
 
 from .models import (
     Category, Brand, Product, ProductImage, Order, OrderItem,
     OrderStatusHistory, Review, AdminUser, Banner, ShippingZone,
-    DiscountCode, SiteSetting, Coupon
+    DiscountCode, SiteSetting, Coupon, PaymentNumber, Customer, CustomerToken
 )
 from .serializers import (
     CategorySerializer, BrandSerializer, ProductListSerializer, ProductDetailSerializer, ProductCreateSerializer,
     ProductImageSerializer, OrderListSerializer, OrderDetailSerializer, OrderCreateSerializer,
     OrderItemSerializer, OrderStatusHistorySerializer, ReviewSerializer,
     AdminUserSerializer, AdminLoginSerializer, BannerSerializer, ShippingZoneSerializer,
-    DiscountCodeSerializer, SiteSettingSerializer, CouponSerializer, CouponValidateSerializer
+    DiscountCodeSerializer, SiteSettingSerializer, CouponSerializer, CouponValidateSerializer,
+    PaymentNumberSerializer,
+    CustomerRegisterSerializer, CustomerLoginSerializer, CustomerProfileSerializer,
+    CustomerChangePasswordSerializer, CustomerPasswordResetRequestSerializer,
+    CustomerPasswordResetConfirmSerializer, CustomerResendVerificationSerializer,
+    CustomerOrderListSerializer, CustomerOrderDetailSerializer,
 )
+from .shipping_utils import get_shipping_cost, is_valid_governorate
+from .customer_auth import get_customer_from_request
+from .email_utils import send_verification_email, send_password_reset_email
+from .order_constants import STATUS_LABELS_AR
 
 
+@method_decorator(cache_page(60 * 15), name='list')
 class CategoryViewSet(viewsets.ModelViewSet):
     """ViewSet for Category model"""
     queryset = Category.objects.filter(is_active=True).annotate(products_count=Count('products'))
@@ -58,12 +95,12 @@ class CategoryViewSet(viewsets.ModelViewSet):
         
         image = request.FILES['image']
         
-        # Save file to media directory
         import uuid
-        ext = os.path.splitext(image.name)[1]
+        content, compressed = compress_image_to_webp(image)
+        ext = '.webp' if compressed else os.path.splitext(image.name)[1]
         filename = f"categories/{uuid.uuid4()}{ext}"
         
-        path = default_storage.save(filename, ContentFile(image.read()))
+        path = default_storage.save(filename, content)
         url = request.build_absolute_uri(settings.MEDIA_URL + path)
         
         return Response({'url': url})
@@ -85,6 +122,7 @@ class BrandViewSet(viewsets.ModelViewSet):
         return [IsAdminUser()]
 
 
+@method_decorator(cache_page(60 * 15), name='list')
 class ProductViewSet(viewsets.ModelViewSet):
     """ViewSet for Product model"""
     queryset = Product.objects.filter(is_active=True).select_related('category', 'brand').prefetch_related(
@@ -126,6 +164,11 @@ class ProductViewSet(viewsets.ModelViewSet):
         category_slug = self.request.query_params.get('category')
         if category_slug:
             queryset = queryset.filter(category__slug=category_slug)
+        
+        # Exclude category
+        exclude_category = self.request.query_params.get('exclude_category')
+        if exclude_category:
+            queryset = queryset.exclude(category__slug=exclude_category)
         
         # Filter by brand
         brand_id = self.request.query_params.get('brand')
@@ -171,7 +214,25 @@ class ProductViewSet(viewsets.ModelViewSet):
         
         return queryset
     
+    def get_object(self):
+        """Allow lookup by slug or id (UUID)"""
+        queryset = self.filter_queryset(self.get_queryset())
+        lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
+        lookup = self.kwargs.get(lookup_url_kwarg)
 
+        # Try to match by UUID (id) if it looks like one
+        try:
+            import uuid
+            uuid_obj = uuid.UUID(lookup)
+            # If successful, try to get object by ID
+            obj = queryset.get(id=uuid_obj)
+            self.check_object_permissions(self.request, obj)
+            return obj
+        except (ValueError, Product.DoesNotExist):
+            pass
+
+        # Fallback to default behavior (slug)
+        return super().get_object()
 
     def retrieve(self, request, *args, **kwargs):
         """Increment views count when product is viewed"""
@@ -181,6 +242,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
     
+    @method_decorator(cache_page(60 * 15))
     @action(detail=False, methods=['get'])
     def featured(self, request):
         """Get featured products"""
@@ -220,12 +282,12 @@ class ProductViewSet(viewsets.ModelViewSet):
         
         image = request.FILES['image']
         
-        # Save file to media directory
         import uuid
-        ext = os.path.splitext(image.name)[1]
+        content, compressed = compress_image_to_webp(image)
+        ext = '.webp' if compressed else os.path.splitext(image.name)[1]
         filename = f"products/{uuid.uuid4()}{ext}"
         
-        path = default_storage.save(filename, ContentFile(image.read()))
+        path = default_storage.save(filename, content)
         url = request.build_absolute_uri(settings.MEDIA_URL + path)
         
         return Response({'url': url})
@@ -266,11 +328,15 @@ class ProductViewSet(viewsets.ModelViewSet):
 
 class OrderViewSet(viewsets.ModelViewSet):
     """ViewSet for Order model"""
-    queryset = Order.objects.all().prefetch_related('items', 'status_history')
+    queryset = Order.objects.all().prefetch_related(
+        Prefetch('items', queryset=OrderItem.objects.select_related('product')),
+        'status_history',
+    )
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['order_number', 'customer_name', 'customer_phone']
     ordering_fields = ['created_at', 'total', 'status']
     ordering = ['-created_at']
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
     
     def get_serializer_class(self):
         """Use different serializers for different actions"""
@@ -312,9 +378,58 @@ class OrderViewSet(viewsets.ModelViewSet):
     
     def create(self, request, *args, **kwargs):
         """Create a new order"""
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        order = serializer.save()
+        import json
+        from django.core.exceptions import ObjectDoesNotExist
+        
+        # Build data dict to handle both JSON and FormData
+        data = {}
+        
+        # Copy all request data
+        for key, value in request.data.items():
+            data[key] = value
+        
+        # Handle items field - parse JSON string if present (FormData case)
+        if 'items' in data and isinstance(data['items'], str):
+            try:
+                data['items'] = json.loads(data['items'])
+            except (json.JSONDecodeError, TypeError) as e:
+                return Response(
+                    {'items': [f'Invalid JSON format: {str(e)}']},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Try to attach to customer account if logged in
+        customer = None
+        try:
+            customer = get_customer_from_request(request)
+        except Exception:
+            pass  # Guest order, no problem
+
+        try:
+            serializer = self.get_serializer(data=data, context={'request': request, 'customer': customer})
+            serializer.is_valid(raise_exception=True)
+            order = serializer.save()
+        except ObjectDoesNotExist as e:
+            return Response(
+                {'error': 'أحد المنتجات في السلة لم يعد متوفراً. يرجى تحديث سلة التسوق والمحاولة مرة أخرى.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except serializers.ValidationError as e:
+            # Return validation errors directly
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Order validation error: {str(e.detail)}")
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            # Log the error for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Order creation error: {str(e)}", exc_info=True)
+            # Return the actual error message for debugging
+            return Response(
+                {'error': f'حدث خطأ أثناء إنشاء الطلب: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         # Update product sales count and stock
         for item in order.items.all():
@@ -517,23 +632,27 @@ class ShippingZoneViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def get_shipping_cost(self, request):
-        """Get shipping cost for a governorate"""
+        """Get shipping cost for a governorate using 3-tier zonal pricing"""
         governorate = request.query_params.get('governorate')
         if not governorate:
             return Response({'error': 'Governorate is required'}, status=status.HTTP_400_BAD_REQUEST)
         
-        try:
-            zone = ShippingZone.objects.get(governorate=governorate, is_active=True)
-            serializer = self.get_serializer(zone)
-            return Response(serializer.data)
-        except ShippingZone.DoesNotExist:
-            # Return default shipping cost from settings
-            from django.conf import settings
-            return Response({
-                'governorate': governorate,
-                'shipping_cost': settings.DEFAULT_SHIPPING_COST,
-                'estimated_days': '3-7 أيام'
-            })
+        # Use new zonal pricing system
+        shipping_cost = get_shipping_cost(governorate)
+        
+        # Determine estimated delivery days based on tier
+        if shipping_cost == 60:
+            estimated_days = '2-4 أيام'
+        elif shipping_cost == 100:
+            estimated_days = '3-5 أيام'
+        else:  # 120 EGP
+            estimated_days = '4-7 أيام'
+        
+        return Response({
+            'governorate': governorate,
+            'shipping_cost': shipping_cost,
+            'estimated_days': estimated_days
+        })
 
 
 class SiteSettingViewSet(viewsets.ModelViewSet):
@@ -610,9 +729,13 @@ class CouponViewSet(viewsets.ModelViewSet):
         if serializer.is_valid():
             coupon = serializer.validated_data['coupon']
             amount = serializer.validated_data.get('amount', 0)
+            eligible_amount = serializer.validated_data.get('eligible_amount')
             
-            discount_amount = (float(amount) * float(coupon.discount_percentage)) / 100 if amount else 0
-            final_amount = float(amount) - discount_amount if amount else 0
+            # Use eligible_amount as base if available, otherwise amount
+            base_amount = eligible_amount if eligible_amount is not None else (amount or 0)
+            
+            discount_amount = (float(base_amount) * float(coupon.discount_percentage)) / 100
+            final_amount = float(amount or 0) - discount_amount
             
             return Response({
                 'valid': True,
@@ -677,3 +800,362 @@ def admin_profile(request):
 def health_check(request):
     """Health check endpoint"""
     return Response({'status': 'ok', 'message': 'Izaar API is running'})
+
+
+class PaymentNumberViewSet(viewsets.ModelViewSet):
+    """ViewSet for PaymentNumber model - Public read, admin write"""
+    queryset = PaymentNumber.objects.filter(is_active=True).order_by('payment_type', 'display_order')
+    serializer_class = PaymentNumberSerializer
+    
+    def get_permissions(self):
+        """Public read access, admin write access"""
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAdminUser()]
+    
+    def get_queryset(self):
+        """Filter by payment_type if provided"""
+        queryset = super().get_queryset()
+        payment_type = self.request.query_params.get('payment_type')
+        if payment_type:
+            queryset = queryset.filter(payment_type=payment_type)
+        return queryset
+
+
+# ============================================================================
+# CUSTOMER AUTHENTICATION VIEWS
+# ============================================================================
+
+class CustomerRegisterView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = CustomerRegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        token = secrets.token_urlsafe(32)
+        try:
+            customer = Customer.objects.create(
+                first_name=data['first_name'],
+                last_name=data['last_name'],
+                email=data['email'].lower().strip(),
+                phone=data.get('phone') or None,
+                password=make_password(data['password']),
+                is_active=False,
+                is_verified=False,
+                email_verification_token=token,
+                email_verification_sent_at=timezone.now(),
+            )
+        except Exception as e:
+            logger.exception("Customer registration failed: %s", e)
+            return Response(
+                {'error': 'حدث خطأ أثناء إنشاء الحساب. يرجى المحاولة لاحقاً.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        try:
+            send_verification_email(customer)
+        except Exception as e:
+            logger.warning("Verification email send failed (account created): %s", e)
+        return Response({'message': 'تم إنشاء حسابك. يرجى تفعيل بريدك الإلكتروني.'}, status=status.HTTP_201_CREATED)
+
+
+class CustomerVerifyEmailView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        token = request.query_params.get('token')
+        if not token:
+            return Response({'error': 'رابط التفعيل غير صالح.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            customer = Customer.objects.get(email_verification_token=token)
+        except Customer.DoesNotExist:
+            return Response({'error': 'رابط التفعيل غير صالح أو منتهي.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        sent_at = customer.email_verification_sent_at
+        if sent_at and (timezone.now() - sent_at) > timedelta(hours=24):
+            customer.email_verification_token = None
+            customer.email_verification_sent_at = None
+            customer.save(update_fields=['email_verification_token', 'email_verification_sent_at'])
+            return Response({'error': 'انتهت صلاحية رابط التفعيل. يرجى طلب إرسال رابط جديد.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        customer.is_active = True
+        customer.is_verified = True
+        customer.email_verification_token = None
+        customer.email_verification_sent_at = None
+        customer.save(update_fields=['is_active', 'is_verified', 'email_verification_token', 'email_verification_sent_at'])
+
+        return Response({'message': 'تم تفعيل حسابك بنجاح!'})
+
+
+class CustomerLoginView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = CustomerLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        email = data['email'].lower().strip()
+        password = data['password']
+
+        try:
+            customer = Customer.objects.get(email=email)
+        except Customer.DoesNotExist:
+            return Response({'detail': 'البريد الإلكتروني أو كلمة المرور غير صحيحة.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        if not customer.is_active:
+            return Response({
+                'detail': 'الحساب غير مفعل. يرجى تفعيل بريدك الإلكتروني أولاً.',
+                'unverified': True,
+                'email': customer.email,
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        if not check_password(password, customer.password):
+            return Response({'detail': 'البريد الإلكتروني أو كلمة المرور غير صحيحة.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Auto-link past guest orders by email
+        Order.objects.filter(
+            customer_email__iexact=customer.email,
+            customer__isnull=True
+        ).update(customer=customer)
+
+        # Create or update CustomerToken
+        token_key = secrets.token_urlsafe(40)
+        CustomerToken.objects.update_or_create(
+            customer=customer,
+            defaults={'key': token_key}
+        )
+
+        profile = CustomerProfileSerializer(customer).data
+        return Response({'token': token_key, 'customer': profile})
+
+
+class CustomerLogoutView(APIView):
+    def post(self, request):
+        customer = get_customer_from_request(request)
+        CustomerToken.objects.filter(customer=customer).delete()
+        return Response({'message': 'تم تسجيل الخروج.'})
+
+
+class CustomerProfileView(APIView):
+    def get(self, request):
+        customer = get_customer_from_request(request)
+        serializer = CustomerProfileSerializer(customer)
+        return Response(serializer.data)
+
+    def patch(self, request):
+        customer = get_customer_from_request(request)
+        serializer = CustomerProfileSerializer(customer, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+class CustomerChangePasswordView(APIView):
+    def post(self, request):
+        customer = get_customer_from_request(request)
+        serializer = CustomerChangePasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        if not check_password(data['old_password'], customer.password):
+            return Response({'old_password': ['كلمة المرور الحالية غير صحيحة.']}, status=status.HTTP_400_BAD_REQUEST)
+
+        customer.password = make_password(data['new_password'])
+        customer.save(update_fields=['password'])
+        return Response({'message': 'تم تغيير كلمة المرور بنجاح.'})
+
+
+class CustomerPasswordResetRequestView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = CustomerPasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data['email'].lower().strip()
+
+        try:
+            customer = Customer.objects.get(email=email)
+            token = secrets.token_urlsafe(32)
+            customer.password_reset_token = token
+            customer.password_reset_sent_at = timezone.now()
+            customer.save(update_fields=['password_reset_token', 'password_reset_sent_at'])
+            send_password_reset_email(customer)
+        except Customer.DoesNotExist:
+            pass
+
+        return Response({'message': 'إذا كان البريد الإلكتروني مسجلاً، ستصلك رسالة لإعادة تعيين كلمة المرور.'})
+
+
+class CustomerPasswordResetConfirmView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = CustomerPasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        try:
+            customer = Customer.objects.get(password_reset_token=data['token'])
+        except Customer.DoesNotExist:
+            return Response({'error': 'الرابط غير صالح أو منتهي.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        sent_at = customer.password_reset_sent_at
+        if sent_at and (timezone.now() - sent_at) > timedelta(hours=1):
+            customer.password_reset_token = None
+            customer.password_reset_sent_at = None
+            customer.save(update_fields=['password_reset_token', 'password_reset_sent_at'])
+            return Response({'error': 'انتهت صلاحية الرابط. يرجى طلب إعادة تعيين كلمة المرور مرة أخرى.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        customer.password = make_password(data['new_password'])
+        customer.password_reset_token = None
+        customer.password_reset_sent_at = None
+        customer.save(update_fields=['password', 'password_reset_token', 'password_reset_sent_at'])
+
+        return Response({'message': 'تم تغيير كلمة المرور بنجاح.'})
+
+
+class CustomerResendVerificationView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = CustomerResendVerificationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data['email'].lower().strip()
+
+        try:
+            customer = Customer.objects.get(email=email)
+        except Customer.DoesNotExist:
+            return Response({'message': 'إذا كان البريد مسجلاً ولم يكن مفعلاً، سنرسل لك رابط التفعيل.'})
+
+        if customer.is_verified:
+            return Response({'message': 'الحساب مفعل بالفعل. يمكنك تسجيل الدخول.'})
+
+        sent_at = customer.email_verification_sent_at
+        if sent_at and (timezone.now() - sent_at) < timedelta(minutes=2):
+            return Response({'error': 'يرجى الانتظار دقيقتين قبل طلب إعادة الإرسال.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+        token = secrets.token_urlsafe(32)
+        customer.email_verification_token = token
+        customer.email_verification_sent_at = timezone.now()
+        customer.save(update_fields=['email_verification_token', 'email_verification_sent_at'])
+        send_verification_email(customer)
+
+        return Response({'message': 'تم إرسال رابط التفعيل إلى بريدك الإلكتروني.'})
+
+
+# ============================================================================
+# CUSTOMER ORDERS VIEWS
+# ============================================================================
+
+from django.core.paginator import Paginator, EmptyPage
+
+
+class CustomerOrderListView(APIView):
+    """GET /api/auth/orders/ - List orders for authenticated customer"""
+
+    def get(self, request):
+        customer = get_customer_from_request(request)
+        queryset = Order.objects.filter(customer=customer).prefetch_related(
+            Prefetch('items', queryset=OrderItem.objects.select_related('product').prefetch_related('product__images'))
+        ).order_by('-created_at')
+
+        status_filter = request.query_params.get('status', '').strip()
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        search = request.query_params.get('search', '').strip()
+        if search:
+            queryset = queryset.filter(order_number__icontains=search)
+
+        paginator = Paginator(queryset, 10)
+        page_num = request.query_params.get('page', 1)
+        try:
+            page = paginator.page(int(page_num))
+        except (ValueError, EmptyPage):
+            page = paginator.page(1)
+
+        serializer = CustomerOrderListSerializer(page.object_list, many=True, context={'request': request})
+        base = request.build_absolute_uri(request.path)
+        def build_page_url(p):
+            q = request.GET.copy()
+            q['page'] = p
+            return f"{base}?{q.urlencode()}"
+
+        next_url = build_page_url(page.next_page_number()) if page.has_next() else None
+        prev_url = build_page_url(page.previous_page_number()) if page.has_previous() else None
+
+        return Response({
+            'count': paginator.count,
+            'next': next_url,
+            'previous': prev_url,
+            'results': serializer.data,
+            'current_page': page.number,
+            'total_pages': paginator.num_pages,
+        })
+
+
+class CustomerOrderDetailView(APIView):
+    """GET /api/auth/orders/<order_number>/ - Detail for single order"""
+
+    def get(self, request, order_number):
+        customer = get_customer_from_request(request)
+        try:
+            order = Order.objects.prefetch_related(
+                Prefetch('items', queryset=OrderItem.objects.select_related('product').prefetch_related('product__images')),
+                'status_history'
+            ).get(order_number=order_number)
+        except Order.DoesNotExist:
+            return Response({'error': 'الطلب غير موجود.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if order.customer_id != customer.id:
+            return Response({'error': 'لا يمكنك عرض هذا الطلب.'}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = CustomerOrderDetailSerializer(order, context={'request': request})
+        data = serializer.data
+        data['status_label_ar'] = STATUS_LABELS_AR.get(order.status, order.get_status_display())
+        return Response(data)
+
+
+class CustomerOrderCancelView(APIView):
+    """POST /api/auth/orders/<order_number>/cancel/ - Cancel order"""
+
+    def post(self, request, order_number):
+        customer = get_customer_from_request(request)
+        try:
+            order = Order.objects.get(order_number=order_number)
+        except Order.DoesNotExist:
+            return Response({'error': 'الطلب غير موجود.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if order.customer_id != customer.id:
+            return Response({'error': 'لا يمكنك إلغاء هذا الطلب.'}, status=status.HTTP_403_FORBIDDEN)
+
+        if order.status not in ('pending', 'confirmed'):
+            return Response(
+                {'error': 'لا يمكن إلغاء هذا الطلب لأنه قيد التجهيز أو تم شحنه بالفعل.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        old_status = order.status
+        order.status = 'cancelled'
+        order.cancelled_at = timezone.now()
+        order.save(update_fields=['status', 'cancelled_at', 'updated_at'])
+
+        OrderStatusHistory.objects.create(
+            order=order,
+            old_status=old_status,
+            new_status='cancelled',
+            notes='تم الإلغاء بواسطة العميل',
+            changed_by=None,
+        )
+
+        for item in order.items.all():
+            product = item.product
+            product.stock_quantity += item.quantity
+            product.is_in_stock = True
+            product.save(update_fields=['stock_quantity', 'is_in_stock'])
+
+        return Response({'message': 'تم إلغاء طلبك بنجاح.'})

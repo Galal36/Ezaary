@@ -217,8 +217,24 @@ class Order(models.Model):
         ('cancelled', 'ملغي'),
     ]
     
+    PAYMENT_METHOD_CHOICES = [
+        ('cash_on_delivery', 'الدفع عند الاستلام'),
+        ('vodafone_cash', 'فودافون كاش'),
+        ('instapay', 'انستاباي'),
+    ]
+    
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     order_number = models.CharField(max_length=50, unique=True, verbose_name="رقم الطلب")
+
+    # Optional link to Customer account (for logged-in customers)
+    customer = models.ForeignKey(
+        'Customer',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='orders',
+        verbose_name="حساب العميل"
+    )
     
     # Customer Information (no user account)
     customer_name = models.CharField(max_length=255, verbose_name="اسم العميل")
@@ -227,19 +243,25 @@ class Order(models.Model):
     
     # Shipping Address
     governorate = models.CharField(max_length=100, verbose_name="المحافظة")
-    district = models.CharField(max_length=100, verbose_name="المركز")
+    district = models.CharField(max_length=100, blank=True, null=True, verbose_name="المركز")
     village = models.CharField(max_length=100, blank=True, null=True, verbose_name="القرية")
     detailed_address = models.TextField(verbose_name="العنوان التفصيلي")
     
     # Order Totals
-    subtotal = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)], 
+    subtotal = models.DecimalField(max_digits=20, decimal_places=2, validators=[MinValueValidator(0)], 
                                    verbose_name="المجموع الفرعي")
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, 
                                          validators=[MinValueValidator(0)], verbose_name="الخصم")
     shipping_cost = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)], 
                                        verbose_name="تكلفة الشحن")
-    total = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)], 
+    total = models.DecimalField(max_digits=20, decimal_places=2, validators=[MinValueValidator(0)], 
                                verbose_name="الإجمالي")
+    
+    # Payment Information
+    payment_method = models.CharField(max_length=50, choices=PAYMENT_METHOD_CHOICES, 
+                                     default='cash_on_delivery', verbose_name="طريقة الدفع")
+    payment_screenshot = models.FileField(upload_to='payment_screenshots/', blank=True, null=True, 
+                                         verbose_name="صورة تأكيد الدفع")
     
     # Order Status
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='pending', 
@@ -263,6 +285,7 @@ class Order(models.Model):
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['order_number']),
+            models.Index(fields=['customer']),
             models.Index(fields=['customer_phone']),
             models.Index(fields=['status']),
             models.Index(fields=['-created_at']),
@@ -406,6 +429,50 @@ class AdminUser(AbstractUser):
 
     def __str__(self):
         return self.full_name_ar
+
+
+class Customer(models.Model):
+    """Customer accounts for shop visitors/buyers (عملاء المتجر)"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    first_name = models.CharField(max_length=100, verbose_name="الاسم الأول")
+    last_name = models.CharField(max_length=100, verbose_name="الاسم الأخير")
+    email = models.EmailField(unique=True, verbose_name="البريد الإلكتروني")
+    phone = models.CharField(max_length=20, blank=True, null=True, verbose_name="رقم الهاتف")
+    password = models.CharField(max_length=128, verbose_name="كلمة المرور")
+    is_active = models.BooleanField(default=False, verbose_name="نشط")
+    is_verified = models.BooleanField(default=False, verbose_name="موثق البريد")
+    email_verification_token = models.CharField(max_length=64, blank=True, null=True, verbose_name="رمز تفعيل البريد")
+    email_verification_sent_at = models.DateTimeField(blank=True, null=True, verbose_name="تاريخ إرسال تفعيل البريد")
+    password_reset_token = models.CharField(max_length=64, blank=True, null=True, verbose_name="رمز إعادة تعيين كلمة المرور")
+    password_reset_sent_at = models.DateTimeField(blank=True, null=True, verbose_name="تاريخ إرسال إعادة التعيين")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاريخ الإنشاء")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="تاريخ التحديث")
+
+    class Meta:
+        verbose_name = "عميل"
+        verbose_name_plural = "العملاء"
+        indexes = [
+            models.Index(fields=['email']),
+            models.Index(fields=['is_active']),
+            models.Index(fields=['is_verified']),
+        ]
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name} ({self.email})"
+
+
+class CustomerToken(models.Model):
+    """Authentication tokens for Customer (رموز جلسات العملاء)"""
+    customer = models.OneToOneField(Customer, on_delete=models.CASCADE, related_name='token')
+    key = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "رمز جلسة عميل"
+        verbose_name_plural = "رموز جلسات العملاء"
+
+    def __str__(self):
+        return f"Token for {self.customer.email}"
 
 
 class Banner(models.Model):
@@ -579,3 +646,31 @@ class SiteSetting(models.Model):
 
     def __str__(self):
         return f"{self.key}: {self.value}"
+
+
+class PaymentNumber(models.Model):
+    """Payment numbers for manual payment methods (أرقام الدفع)"""
+    PAYMENT_TYPE_CHOICES = [
+        ('vodafone_cash', 'فودافون كاش'),
+        ('instapay', 'انستاباي'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    payment_type = models.CharField(max_length=50, choices=PAYMENT_TYPE_CHOICES, verbose_name="نوع الدفع")
+    phone_number = models.CharField(max_length=20, verbose_name="رقم الهاتف")
+    account_name = models.CharField(max_length=255, blank=True, null=True, verbose_name="اسم الحساب")
+    is_active = models.BooleanField(default=True, verbose_name="نشط")
+    display_order = models.IntegerField(default=0, verbose_name="ترتيب العرض")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاريخ الإنشاء")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="تاريخ التحديث")
+
+    class Meta:
+        verbose_name = "رقم دفع"
+        verbose_name_plural = "أرقام الدفع"
+        ordering = ['payment_type', 'display_order']
+        indexes = [
+            models.Index(fields=['payment_type', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f"{self.get_payment_type_display()} - {self.phone_number}"

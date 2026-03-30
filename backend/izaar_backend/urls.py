@@ -20,8 +20,8 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 urlpatterns = [
-    # Django admin
-    path('admin/', admin.site.urls),
+    # Django admin (changed to /django-admin/ to avoid conflict with frontend admin)
+    path('django-admin/', admin.site.urls),
     
     # API endpoints
     path('api/', include('store.urls')),

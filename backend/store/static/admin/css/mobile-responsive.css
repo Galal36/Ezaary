@@ -1,0 +1,404 @@
+/* Mobile Responsive Styles for Django Admin - Order List */
+
+/* Ensure viewport is set correctly */
+@viewport {
+    width: device-width;
+    zoom: 1;
+}
+
+/* Base responsive improvements */
+@media screen and (max-width: 768px) {
+    /* Make container fluid */
+    #content {
+        padding: 10px !important;
+        margin: 0 !important;
+    }
+
+    #content-main {
+        padding: 0 !important;
+    }
+
+    /* Header adjustments */
+    #header {
+        padding: 10px !important;
+    }
+
+    #branding h1 {
+        font-size: 18px !important;
+        margin: 0 !important;
+    }
+
+    /* Navigation */
+    #nav-global {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+    }
+
+    #nav-global a {
+        padding: 5px 10px !important;
+        font-size: 12px !important;
+    }
+
+    /* Changelist toolbar */
+    .changelist-form-container {
+        overflow-x: auto !important;
+    }
+
+    #toolbar {
+        padding: 10px !important;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    #toolbar form {
+        width: 100% !important;
+    }
+
+    #toolbar input[type="text"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box;
+    }
+
+    /* Actions dropdown */
+    .actions {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 10px !important;
+        padding: 10px !important;
+    }
+
+    .actions select,
+    .actions .button {
+        width: 100% !important;
+        box-sizing: border-box;
+    }
+
+    /* Results table - make it scrollable horizontally */
+    .results {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+        display: block;
+        width: 100% !important;
+    }
+
+    #result_list {
+        min-width: 100% !important;
+        font-size: 12px !important;
+    }
+
+    /* Table cells */
+    #result_list th,
+    #result_list td {
+        padding: 8px 4px !important;
+        white-space: nowrap;
+        font-size: 11px !important;
+    }
+
+    /* Make text wrap in certain columns */
+    #result_list td.field-customer_name,
+    #result_list td.field-customer_phone,
+    #result_list td.field-order_number {
+        white-space: normal !important;
+        word-wrap: break-word;
+        max-width: 120px;
+    }
+
+    /* Action checkbox column */
+    #result_list .action-checkbox-column {
+        width: 30px !important;
+        padding: 8px 2px !important;
+    }
+
+    /* Status badges should be more compact */
+    #result_list td.field-status {
+        font-size: 10px !important;
+        padding: 4px 2px !important;
+    }
+
+    /* Date columns more compact */
+    #result_list td.field-created_at {
+        font-size: 10px !important;
+        white-space: normal !important;
+        max-width: 80px;
+    }
+
+    /* Price/Total columns */
+    #result_list td.field-total {
+        font-weight: bold;
+        white-space: nowrap;
+    }
+
+    /* Filters sidebar - make it collapsible on mobile */
+    #changelist-filter {
+        position: relative !important;
+        width: 100% !important;
+        margin: 10px 0 !important;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        max-height: none !important;
+    }
+
+    #changelist-filter h2 {
+        background: #f8f8f8;
+        padding: 10px;
+        margin: 0;
+        cursor: pointer;
+        border-bottom: 1px solid #ddd;
+    }
+
+    #changelist-filter h2:after {
+        content: " ▼";
+        float: left;
+        margin-left: 5px;
+    }
+
+    #changelist-filter ul {
+        padding: 10px !important;
+    }
+
+    #changelist-filter li {
+        padding: 5px 0 !important;
+        font-size: 12px !important;
+    }
+
+    /* Search bar */
+    #searchbar {
+        width: 100% !important;
+        box-sizing: border-box;
+        margin-bottom: 10px;
+    }
+
+    /* Pagination */
+    .paginator {
+        padding: 10px !important;
+        font-size: 12px !important;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 5px;
+    }
+
+    .paginator a,
+    .paginator span {
+        padding: 5px 8px !important;
+        margin: 2px !important;
+    }
+
+    /* Object tools (add button) */
+    .object-tools {
+        float: none !important;
+        margin: 10px 0 !important;
+        display: flex;
+        justify-content: center;
+    }
+
+    .object-tools li {
+        float: none !important;
+        display: inline-block;
+        margin: 0 5px !important;
+    }
+
+    .object-tools a {
+        padding: 8px 15px !important;
+        font-size: 13px !important;
+    }
+
+    /* Breadcrumbs */
+    .breadcrumbs {
+        padding: 10px !important;
+        font-size: 12px !important;
+        white-space: nowrap;
+        overflow-x: auto;
+    }
+
+    /* Messages */
+    .messagelist {
+        margin: 10px !important;
+    }
+
+    .messagelist li {
+        padding: 10px !important;
+        font-size: 13px !important;
+    }
+
+    /* Submit row */
+    .submit-row {
+        padding: 10px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 10px !important;
+    }
+
+    .submit-row input,
+    .submit-row a {
+        width: 100% !important;
+        box-sizing: border-box;
+        text-align: center !important;
+        padding: 10px !important;
+    }
+
+    /* Form fields in detail view */
+    .form-row {
+        padding: 10px 0 !important;
+    }
+
+    .form-row label {
+        float: none !important;
+        width: 100% !important;
+        padding-right: 0 !important;
+        margin-bottom: 5px;
+        display: block;
+    }
+
+    .form-row input,
+    .form-row select,
+    .form-row textarea {
+        width: 100% !important;
+        box-sizing: border-box;
+    }
+
+    /* Inline tables */
+    .inline-group {
+        overflow-x: auto !important;
+    }
+
+    .inline-related {
+        overflow-x: auto !important;
+    }
+
+    .inline-related table {
+        min-width: 600px;
+    }
+
+    /* Tabular inline */
+    .tabular {
+        overflow-x: auto !important;
+    }
+
+    .tabular table {
+        font-size: 11px !important;
+    }
+
+    .tabular th,
+    .tabular td {
+        padding: 5px 3px !important;
+    }
+
+    /* Module headers */
+    .module h2,
+    .module caption {
+        padding: 8px !important;
+        font-size: 13px !important;
+    }
+
+    /* Dashboard modules */
+    .module {
+        margin-bottom: 15px !important;
+    }
+
+    /* Calendar widget */
+    .calendarbox,
+    .clockbox {
+        position: fixed !important;
+        left: 50% !important;
+        top: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        max-width: 90vw !important;
+        z-index: 9999 !important;
+    }
+}
+
+/* Extra small devices (phones in portrait, less than 576px) */
+@media screen and (max-width: 576px) {
+    /* Even more compact */
+    #result_list th,
+    #result_list td {
+        padding: 6px 2px !important;
+        font-size: 10px !important;
+    }
+
+    #result_list td.field-customer_name,
+    #result_list td.field-customer_phone {
+        max-width: 100px;
+    }
+
+    /* Stack filters vertically */
+    #changelist .actions label {
+        display: block;
+        margin-bottom: 5px;
+    }
+
+    /* Compact header */
+    #branding h1 {
+        font-size: 16px !important;
+    }
+
+    /* User tools */
+    #user-tools {
+        float: none !important;
+        text-align: center;
+        padding: 5px !important;
+        font-size: 11px !important;
+    }
+}
+
+/* Landscape orientation improvements */
+@media screen and (max-width: 900px) and (orientation: landscape) {
+    #changelist-filter {
+        position: relative !important;
+        width: 100% !important;
+    }
+
+    .results {
+        max-height: 60vh;
+        overflow-y: auto;
+    }
+}
+
+/* Touch-friendly improvements */
+@media (hover: none) and (pointer: coarse) {
+    /* Larger touch targets */
+    a, button, input[type="submit"], input[type="button"] {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Larger checkboxes */
+    input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+    }
+
+    /* Better spacing for touch */
+    #result_list tr {
+        min-height: 44px;
+    }
+}
+
+/* Print styles - keep desktop layout */
+@media print {
+    #header,
+    #toolbar,
+    .object-tools,
+    #changelist-filter,
+    .paginator {
+        display: none !important;
+    }
+
+    #result_list {
+        font-size: 10pt !important;
+    }
+
+    #result_list td,
+    #result_list th {
+        white-space: normal !important;
+    }
+}
+
+
+

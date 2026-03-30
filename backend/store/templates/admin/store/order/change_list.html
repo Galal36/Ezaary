@@ -1,0 +1,243 @@
+{% extends "admin/change_list.html" %}
+{% load static %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <style>
+        /* Additional mobile-specific styles for Order list */
+        @media screen and (max-width: 768px) {
+            /* Card view for mobile */
+            .mobile-order-card {
+                display: none;
+            }
+            
+            @supports (display: grid) {
+                /* Hide default table on mobile, show cards instead */
+                #result_list {
+                    display: none;
+                }
+                
+                .mobile-order-card {
+                    display: block;
+                    background: white;
+                    border: 1px solid #ddd;
+                    border-radius: 8px;
+                    padding: 15px;
+                    margin-bottom: 15px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+                
+                .mobile-order-card .order-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 10px;
+                    padding-bottom: 10px;
+                    border-bottom: 2px solid #f0f0f0;
+                }
+                
+                .mobile-order-card .order-number {
+                    font-weight: bold;
+                    color: #417690;
+                    font-size: 14px;
+                }
+                
+                .mobile-order-card .order-status {
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    font-weight: bold;
+                    text-transform: uppercase;
+                }
+                
+                .mobile-order-card .order-status.pending {
+                    background: #fff3cd;
+                    color: #856404;
+                }
+                
+                .mobile-order-card .order-status.confirmed {
+                    background: #d1ecf1;
+                    color: #0c5460;
+                }
+                
+                .mobile-order-card .order-status.shipped {
+                    background: #d4edda;
+                    color: #155724;
+                }
+                
+                .mobile-order-card .order-status.delivered {
+                    background: #c3e6cb;
+                    color: #155724;
+                }
+                
+                .mobile-order-card .order-status.cancelled {
+                    background: #f8d7da;
+                    color: #721c24;
+                }
+                
+                .mobile-order-card .order-details {
+                    margin: 10px 0;
+                }
+                
+                .mobile-order-card .order-detail-row {
+                    display: flex;
+                    justify-content: space-between;
+                    padding: 5px 0;
+                    font-size: 13px;
+                }
+                
+                .mobile-order-card .order-detail-label {
+                    color: #666;
+                    font-weight: 500;
+                }
+                
+                .mobile-order-card .order-detail-value {
+                    color: #333;
+                    font-weight: 400;
+                    text-align: left;
+                }
+                
+                .mobile-order-card .order-total {
+                    font-size: 16px;
+                    font-weight: bold;
+                    color: #417690;
+                }
+                
+                .mobile-order-card .order-footer {
+                    margin-top: 10px;
+                    padding-top: 10px;
+                    border-top: 1px solid #f0f0f0;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+                
+                .mobile-order-card .order-date {
+                    font-size: 11px;
+                    color: #999;
+                }
+                
+                .mobile-order-card .order-actions {
+                    display: flex;
+                    gap: 5px;
+                }
+                
+                .mobile-order-card .order-actions a {
+                    padding: 6px 12px;
+                    background: #417690;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    display: inline-block;
+                }
+                
+                .mobile-order-card .order-actions a:hover {
+                    background: #2c5266;
+                }
+                
+                /* Ensure action checkboxes work with cards */
+                .mobile-order-card .order-checkbox {
+                    margin-left: 10px;
+                }
+                
+                .mobile-order-card .order-checkbox input {
+                    width: 20px;
+                    height: 20px;
+                }
+            }
+        }
+        
+        /* Keep table view on larger screens */
+        @media screen and (min-width: 769px) {
+            .mobile-order-cards-container {
+                display: none;
+            }
+        }
+    </style>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Create mobile card view from table data
+            if (window.innerWidth <= 768) {
+                var resultsTable = document.querySelector('#result_list');
+                if (!resultsTable) return;
+                
+                var rows = resultsTable.querySelectorAll('tbody tr');
+                var cardsContainer = document.createElement('div');
+                cardsContainer.className = 'mobile-order-cards-container';
+                
+                rows.forEach(function(row) {
+                    var cells = row.querySelectorAll('td');
+                    if (cells.length === 0) return;
+                    
+                    var card = document.createElement('div');
+                    card.className = 'mobile-order-card';
+                    
+                    // Extract data from cells (adjust indices based on your list_display)
+                    var checkbox = cells[0].querySelector('input[type="checkbox"]');
+                    var orderNumber = cells[1].textContent.trim();
+                    var customerName = cells[2].textContent.trim();
+                    var customerPhone = cells[3].textContent.trim();
+                    var governorate = cells[4].textContent.trim();
+                    var paymentMethod = cells[5].textContent.trim();
+                    var status = cells[6].textContent.trim();
+                    var total = cells[7].textContent.trim();
+                    var createdAt = cells[8].textContent.trim();
+                    var editLink = cells[1].querySelector('a') ? cells[1].querySelector('a').href : '#';
+                    
+                    // Build card HTML
+                    var statusClass = status.toLowerCase().replace(/\s+/g, '-');
+                    card.innerHTML = `
+                        <div class="order-header">
+                            <div class="order-number">
+                                <span style="color: #999; font-size: 11px;">رقم الطلب:</span><br>
+                                ${orderNumber}
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span class="order-status ${statusClass}">${status}</span>
+                                ${checkbox ? '<div class="order-checkbox">' + checkbox.outerHTML + '</div>' : ''}
+                            </div>
+                        </div>
+                        <div class="order-details">
+                            <div class="order-detail-row">
+                                <span class="order-detail-label">العميل:</span>
+                                <span class="order-detail-value">${customerName}</span>
+                            </div>
+                            <div class="order-detail-row">
+                                <span class="order-detail-label">الهاتف:</span>
+                                <span class="order-detail-value" dir="ltr" style="text-align: right;">${customerPhone}</span>
+                            </div>
+                            <div class="order-detail-row">
+                                <span class="order-detail-label">المحافظة:</span>
+                                <span class="order-detail-value">${governorate}</span>
+                            </div>
+                            <div class="order-detail-row">
+                                <span class="order-detail-label">طريقة الدفع:</span>
+                                <span class="order-detail-value">${paymentMethod}</span>
+                            </div>
+                            <div class="order-detail-row">
+                                <span class="order-detail-label">الإجمالي:</span>
+                                <span class="order-detail-value order-total">${total}</span>
+                            </div>
+                        </div>
+                        <div class="order-footer">
+                            <span class="order-date">${createdAt}</span>
+                            <div class="order-actions">
+                                <a href="${editLink}">عرض التفاصيل</a>
+                            </div>
+                        </div>
+                    `;
+                    
+                    cardsContainer.appendChild(card);
+                });
+                
+                // Insert cards container after the table
+                resultsTable.parentNode.insertBefore(cardsContainer, resultsTable);
+            }
+        });
+    </script>
+{% endblock %}
+
+
+
